@@ -4,13 +4,15 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/colors.sh"
+source "$SCRIPT_DIR/config.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DATABASE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-DB_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/mbtc-dash"
-DB_FILE="$DB_DIR/peers.db"
+# Use paths from config.sh
+DB_DIR="$MBTC_DATA_DIR"
+DB_FILE="$MBTC_DB_FILE"
 
 # Geo status codes
 GEO_OK=0

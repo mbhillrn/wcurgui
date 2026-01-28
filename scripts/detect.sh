@@ -1,34 +1,19 @@
 #!/bin/bash
-# MBTC-DASH - Bitcoin Core Detection
+# MBTC-DASH - Bitcoin Core Detection Script
 # Detects Bitcoin Core installation, datadir, conf, and auth settings
-# All detected values stored in MBTC_* environment variables
+
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/ui.sh"
+MBTC_DIR="$(dirname "$SCRIPT_DIR")"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ENVIRONMENT VARIABLES (MBTC_ prefix to avoid conflicts)
-# These are exported so other scripts can use them
-# ═══════════════════════════════════════════════════════════════════════════════
-
-export MBTC_CLI_PATH=""
-export MBTC_DATADIR=""
-export MBTC_CONF=""
-export MBTC_NETWORK="main"
-export MBTC_RPC_HOST="127.0.0.1"
-export MBTC_RPC_PORT="8332"
-export MBTC_RPC_USER=""
-export MBTC_RPC_PASS=""
-export MBTC_COOKIE_PATH=""
-export MBTC_VERSION=""
-export MBTC_RUNNING=0
+# Source libraries
+source "$MBTC_DIR/lib/ui.sh"
+source "$MBTC_DIR/lib/config.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
-
-CACHE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/mbtc-dash"
-CACHE_FILE="$CACHE_DIR/detection_cache.conf"
 
 # Common datadir locations
 DATADIR_CANDIDATES=(
@@ -60,6 +45,9 @@ CONF_CANDIDATES=(
     "/var/lib/bitcoind/bitcoin.conf"
 )
 
+# Track if bitcoind is running
+MBTC_RUNNING=0
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CTRL+C HANDLING
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -71,7 +59,6 @@ handle_ctrl_c() {
     local now
     now=$(date +%s)
 
-    # Reset counter if more than 2 seconds since last Ctrl+C
     if (( now - CTRL_C_TIME > 2 )); then
         CTRL_C_COUNT=0
     fi
@@ -93,39 +80,8 @@ handle_ctrl_c() {
 trap handle_ctrl_c SIGINT
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CACHE FUNCTIONS
+# CACHE DISPLAY
 # ═══════════════════════════════════════════════════════════════════════════════
-
-save_cache() {
-    mkdir -p "$CACHE_DIR"
-
-    cat > "$CACHE_FILE" << EOF
-# MBTC-DASH Detection Cache
-# Generated: $(date)
-MBTC_CLI_PATH="$MBTC_CLI_PATH"
-MBTC_DATADIR="$MBTC_DATADIR"
-MBTC_CONF="$MBTC_CONF"
-MBTC_NETWORK="$MBTC_NETWORK"
-MBTC_RPC_HOST="$MBTC_RPC_HOST"
-MBTC_RPC_PORT="$MBTC_RPC_PORT"
-MBTC_RPC_USER="$MBTC_RPC_USER"
-MBTC_COOKIE_PATH="$MBTC_COOKIE_PATH"
-EOF
-    chmod 600 "$CACHE_FILE"
-    msg_ok "Configuration saved to cache"
-}
-
-load_cache() {
-    [[ ! -f "$CACHE_FILE" ]] && return 1
-
-    # Source the cache file to load variables
-    source "$CACHE_FILE" 2>/dev/null || return 1
-
-    # Check if we have at least CLI path
-    [[ -z "$MBTC_CLI_PATH" ]] && return 1
-
-    return 0
-}
 
 display_cached_config() {
     echo ""
@@ -193,7 +149,6 @@ detect_systemd_service() {
     [[ -z "$services" ]] && return 1
 
     for service in $services; do
-        # Check if active
         systemctl is-active --quiet "$service" 2>/dev/null || continue
 
         local exec_start
@@ -257,21 +212,32 @@ validate_conf_file() {
     return 1
 }
 
+validate_datadir() {
+    local dir="$1"
+    [[ ! -d "$dir" ]] && return 1
+
+    if [[ -d "$dir/blocks" ]] || [[ -f "$dir/bitcoin.conf" ]] || [[ -f "$dir/.cookie" ]]; then
+        return 0
+    fi
+
+    for subdir in testnet3 signet regtest; do
+        [[ -d "$dir/$subdir/blocks" ]] && return 0
+    done
+
+    return 1
+}
+
 find_conf_file() {
-    # Already found?
     [[ -n "$MBTC_CONF" ]] && validate_conf_file "$MBTC_CONF" && return 0
 
-    # Check in datadir first if we have it
     if [[ -n "$MBTC_DATADIR" && -f "$MBTC_DATADIR/bitcoin.conf" ]]; then
         MBTC_CONF="$MBTC_DATADIR/bitcoin.conf"
         return 0
     fi
 
-    # Check common locations
     for conf in "${CONF_CANDIDATES[@]}"; do
         if validate_conf_file "$conf"; then
             MBTC_CONF="$conf"
-            # Also grab datadir from same location if not set
             if [[ -z "$MBTC_DATADIR" ]]; then
                 local dir
                 dir=$(dirname "$conf")
@@ -312,17 +278,14 @@ parse_conf_file() {
     return 0
 }
 
-# Full system search for conf file
 search_conf_file() {
     echo ""
     msg_warn "This may take a while depending on your system..."
     echo ""
 
     start_spinner "Searching entire system for bitcoin.conf"
-
     local found
     found=$(find / -name "bitcoin.conf" -type f 2>/dev/null | head -10)
-
     stop_spinner 0 "Search complete"
 
     if [[ -z "$found" ]]; then
@@ -330,7 +293,6 @@ search_conf_file() {
         return 1
     fi
 
-    # Show what we found
     echo ""
     echo -e "${T_SECONDARY}Found these config files:${RST}"
     echo ""
@@ -352,7 +314,7 @@ search_conf_file() {
     read -r choice
 
     if [[ "$choice" == "b" || "$choice" == "B" ]]; then
-        return 2  # Go back
+        return 2
     fi
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice < i )); then
@@ -369,27 +331,9 @@ search_conf_file() {
 # DATADIR DETECTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-validate_datadir() {
-    local dir="$1"
-    [[ ! -d "$dir" ]] && return 1
-
-    # Check for typical Bitcoin Core files/folders
-    if [[ -d "$dir/blocks" ]] || [[ -f "$dir/bitcoin.conf" ]] || [[ -f "$dir/.cookie" ]]; then
-        return 0
-    fi
-
-    for subdir in testnet3 signet regtest; do
-        [[ -d "$dir/$subdir/blocks" ]] && return 0
-    done
-
-    return 1
-}
-
 find_datadir() {
-    # Already found?
     [[ -n "$MBTC_DATADIR" ]] && validate_datadir "$MBTC_DATADIR" && return 0
 
-    # If we have conf, check its directory
     if [[ -n "$MBTC_CONF" ]]; then
         local conf_dir
         conf_dir=$(dirname "$MBTC_CONF")
@@ -399,13 +343,11 @@ find_datadir() {
         fi
     fi
 
-    # Check default
     if validate_datadir "$HOME/.bitcoin"; then
         MBTC_DATADIR="$HOME/.bitcoin"
         return 0
     fi
 
-    # Check candidates
     for dir in "${DATADIR_CANDIDATES[@]}"; do
         if validate_datadir "$dir"; then
             MBTC_DATADIR="$dir"
@@ -413,7 +355,6 @@ find_datadir() {
         fi
     done
 
-    # Check mounted drives
     for mount in /mnt/* /media/*/* /data/*; do
         [[ -d "$mount" ]] || continue
         for subdir in bitcoin .bitcoin bitcoind; do
@@ -427,17 +368,14 @@ find_datadir() {
     return 1
 }
 
-# Full system search for datadir
 search_datadir() {
     echo ""
     msg_warn "Searching for blocks/blk*.dat files - this may take a LONG time..."
     echo ""
 
     start_spinner "Searching entire system for Bitcoin data"
-
     local found
     found=$(find / -name "blk00000.dat" -type f 2>/dev/null | head -5)
-
     stop_spinner 0 "Search complete"
 
     if [[ -z "$found" ]]; then
@@ -453,7 +391,6 @@ search_datadir() {
     local -a found_array
     while IFS= read -r file; do
         [[ -z "$file" ]] && continue
-        # Get parent of blocks directory (the datadir)
         local datadir
         datadir=$(dirname "$(dirname "$file")")
         found_array+=("$datadir")
@@ -474,8 +411,6 @@ search_datadir() {
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice < i )); then
         MBTC_DATADIR="${found_array[$((choice-1))]}"
-
-        # Confirm with user
         echo ""
         if prompt_yn "Use $MBTC_DATADIR as data directory?"; then
             msg_ok "Selected: $MBTC_DATADIR"
@@ -522,40 +457,6 @@ find_cookie() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CLI COMMAND BUILDER & TEST
-# ═══════════════════════════════════════════════════════════════════════════════
-
-get_cli_command() {
-    local cmd="${MBTC_CLI_PATH:-bitcoin-cli}"
-
-    [[ -n "$MBTC_DATADIR" ]] && cmd+=" -datadir=$MBTC_DATADIR"
-    [[ -n "$MBTC_CONF" ]] && cmd+=" -conf=$MBTC_CONF"
-
-    case "$MBTC_NETWORK" in
-        test)   cmd+=" -testnet" ;;
-        signet) cmd+=" -signet" ;;
-        regtest) cmd+=" -regtest" ;;
-    esac
-
-    echo "$cmd"
-}
-
-test_rpc_connection() {
-    local cli_cmd
-    cli_cmd=$(get_cli_command)
-
-    # Try a simple RPC call
-    local result
-    result=$($cli_cmd getblockchaininfo 2>&1)
-
-    if [[ $? -eq 0 ]] && [[ "$result" != *"error"* ]]; then
-        return 0
-    fi
-
-    return 1
-}
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # MANUAL INPUT FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -573,14 +474,12 @@ manual_enter_conf() {
         return 2
     fi
 
-    # Expand ~ if used
     input="${input/#\~/$HOME}"
 
     if [[ -f "$input" ]]; then
         MBTC_CONF="$input"
         msg_ok "Config file set: $MBTC_CONF"
 
-        # Check if datadir is in same location
         local conf_dir
         conf_dir=$(dirname "$input")
         if [[ -z "$MBTC_DATADIR" ]] && validate_datadir "$conf_dir"; then
@@ -614,7 +513,6 @@ manual_enter_datadir() {
         MBTC_DATADIR="$input"
         msg_ok "Data directory set: $MBTC_DATADIR"
 
-        # Check for conf in this dir
         if [[ -z "$MBTC_CONF" && -f "$input/bitcoin.conf" ]]; then
             MBTC_CONF="$input/bitcoin.conf"
             msg_ok "Also found config: $MBTC_CONF"
@@ -677,12 +575,15 @@ display_detection_results() {
 run_detection() {
     print_header "Bitcoin Core Detection"
 
+    local goto_rpc_test=0
+    local goto_manual=0
+
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 1: Check cache
     # ─────────────────────────────────────────────────────────────────────────
     print_section "Step 1: Checking Cached Configuration"
 
-    if load_cache; then
+    if load_config; then
         display_cached_config
 
         echo -e "${T_WARN}?${RST} Is this configuration correct?"
@@ -699,37 +600,28 @@ run_detection() {
         case "$choice" in
             1)
                 msg_ok "Using cached configuration"
-                # Still need to get version and test
                 detect_bitcoin_cli
                 find_cookie
                 if [[ -n "$MBTC_CONF" ]]; then
                     parse_conf_file "$MBTC_CONF"
                 fi
                 print_section_end
-                # Skip to RPC test
                 goto_rpc_test=1
                 ;;
             2)
                 msg_info "Running auto-detection..."
-                # Clear cached values
-                MBTC_CLI_PATH=""
-                MBTC_DATADIR=""
-                MBTC_CONF=""
+                clear_config
                 print_section_end
                 ;;
             3)
                 msg_info "Manual configuration..."
-                MBTC_CLI_PATH=""
-                MBTC_DATADIR=""
-                MBTC_CONF=""
+                clear_config
                 print_section_end
                 goto_manual=1
                 ;;
             *)
                 msg_info "Running auto-detection..."
-                MBTC_CLI_PATH=""
-                MBTC_DATADIR=""
-                MBTC_CONF=""
+                clear_config
                 print_section_end
                 ;;
         esac
@@ -739,22 +631,19 @@ run_detection() {
     fi
 
     # Skip detection if using cache
-    if [[ "${goto_rpc_test:-0}" -eq 1 ]]; then
-        # Jump to RPC test
+    if [[ "${goto_rpc_test}" -eq 1 ]]; then
         :
-    elif [[ "${goto_manual:-0}" -eq 1 ]]; then
+    elif [[ "${goto_manual}" -eq 1 ]]; then
         # Manual configuration flow
         print_section "Manual Configuration"
 
-        # Manual conf entry
         while true; do
             manual_enter_conf
             local result=$?
             [[ $result -eq 0 ]] && break
-            [[ $result -eq 2 ]] && break  # Go back (but nowhere to go)
+            [[ $result -eq 2 ]] && break
         done
 
-        # Manual datadir if not found
         if [[ -z "$MBTC_DATADIR" ]]; then
             while true; do
                 manual_enter_datadir
@@ -780,7 +669,6 @@ run_detection() {
         else
             stop_spinner 0 "bitcoind not running"
 
-            # Check systemd
             msg_info "Checking systemd services..."
             if detect_systemd_service; then
                 msg_ok "Found configuration from systemd service"
@@ -816,9 +704,7 @@ run_detection() {
             read -r choice
 
             case "$choice" in
-                1)
-                    search_conf_file
-                    ;;
+                1) search_conf_file ;;
                 2)
                     while true; do
                         manual_enter_conf
@@ -827,13 +713,10 @@ run_detection() {
                         [[ $result -eq 2 ]] && break
                     done
                     ;;
-                3)
-                    msg_info "Skipping config file"
-                    ;;
+                3) msg_info "Skipping config file" ;;
             esac
         fi
 
-        # Parse config if we have it
         if [[ -n "$MBTC_CONF" && -f "$MBTC_CONF" ]]; then
             msg_info "Parsing config file..."
             parse_conf_file "$MBTC_CONF"
@@ -868,9 +751,7 @@ run_detection() {
                 read -r choice
 
                 case "$choice" in
-                    1)
-                        search_datadir
-                        ;;
+                    1) search_datadir ;;
                     2)
                         while true; do
                             manual_enter_datadir
@@ -879,9 +760,7 @@ run_detection() {
                             [[ $result -eq 2 ]] && break
                         done
                         ;;
-                    3)
-                        msg_info "Skipping data directory"
-                        ;;
+                    3) msg_info "Skipping data directory" ;;
                 esac
             fi
         fi
@@ -929,7 +808,7 @@ run_detection() {
     echo ""
 
     start_spinner "Connecting to Bitcoin Core"
-    if test_rpc_connection; then
+    if test_rpc; then
         stop_spinner 0 ""
         echo ""
         echo -e "  ${T_SUCCESS}${BOLD}╔════════════════════════════════════════╗${RST}"
@@ -946,11 +825,20 @@ run_detection() {
     # ─────────────────────────────────────────────────────────────────────────
     # Save and display results
     # ─────────────────────────────────────────────────────────────────────────
-    save_cache
+    save_config
     display_detection_results
 
     return 0
 }
 
-# Export functions
-export -f get_cli_command
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENTRY POINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# If run directly (not sourced)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    run_detection
+    echo ""
+    echo -en "${T_DIM}Press Enter to continue...${RST}"
+    read -r
+fi

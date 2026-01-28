@@ -16,6 +16,7 @@ declare -a PREREQS=(
     "jq|JSON parser for RPC responses|apt install -y jq|dnf install -y jq|pacman -S --noconfirm jq|1"
     "curl|HTTP client for API calls|apt install -y curl|dnf install -y curl|pacman -S --noconfirm curl|1"
     "sqlite3|SQLite database for caching|apt install -y sqlite3|dnf install -y sqlite|pacman -S --noconfirm sqlite|1"
+    "python3|Python interpreter for dashboard|apt install -y python3|dnf install -y python3|pacman -S --noconfirm python|1"
     "ss|Socket statistics (network info)|apt install -y iproute2|dnf install -y iproute|pacman -S --noconfirm iproute2|0"
     "bc|Calculator for math operations|apt install -y bc|dnf install -y bc|pacman -S --noconfirm bc|0"
 )
@@ -24,6 +25,12 @@ declare -a PREREQS=(
 declare -a BITCOIN_TOOLS=(
     "bitcoin-cli|Bitcoin Core RPC client"
     "bitcoind|Bitcoin Core daemon"
+)
+
+# Python packages (checked separately)
+declare -a PYTHON_PACKAGES=(
+    "rich|Rich terminal UI library"
+    "requests|HTTP library for API calls"
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -254,6 +261,9 @@ run_prereq_check() {
         fi
     done
 
+    # Check Python packages
+    run_python_check
+
     print_section_end
     return 0
 }
@@ -262,4 +272,97 @@ run_prereq_check() {
 quick_prereq_check() {
     check_all_prereqs
     [[ ${#MISSING_REQUIRED[@]} -eq 0 ]]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PYTHON PACKAGE CHECKING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Check if Python package is installed
+python_pkg_exists() {
+    local pkg="$1"
+    python3 -c "import $pkg" 2>/dev/null
+}
+
+# Install Python package
+install_python_pkg() {
+    local pkg="$1"
+    local desc="$2"
+
+    msg_info "Installing Python package: $pkg..."
+
+    # Try pip3 first, then pip
+    if command -v pip3 &>/dev/null; then
+        if pip3 install --user "$pkg" &>/dev/null; then
+            msg_ok "Installed $pkg"
+            return 0
+        fi
+    elif command -v pip &>/dev/null; then
+        if pip install --user "$pkg" &>/dev/null; then
+            msg_ok "Installed $pkg"
+            return 0
+        fi
+    fi
+
+    msg_err "Failed to install $pkg"
+    msg_info "Try: pip3 install $pkg"
+    return 1
+}
+
+# Check all Python packages
+check_python_packages() {
+    MISSING_PYTHON=()
+    PRESENT_PYTHON=()
+
+    for entry in "${PYTHON_PACKAGES[@]}"; do
+        IFS='|' read -r pkg desc <<< "$entry"
+
+        if python_pkg_exists "$pkg"; then
+            PRESENT_PYTHON+=("$pkg|$desc")
+        else
+            MISSING_PYTHON+=("$pkg|$desc")
+        fi
+    done
+}
+
+# Run Python package check with UI
+run_python_check() {
+    # Skip if python3 not installed
+    if ! cmd_exists python3; then
+        return 1
+    fi
+
+    echo ""
+    echo -e "${T_DIM}Python packages:${RST}"
+
+    check_python_packages
+
+    # Show present packages
+    for item in "${PRESENT_PYTHON[@]}"; do
+        IFS='|' read -r pkg desc <<< "$item"
+        msg_ok "${pkg} ${T_DIM}(${desc})${RST}"
+    done
+
+    # Handle missing packages
+    if [[ ${#MISSING_PYTHON[@]} -gt 0 ]]; then
+        echo ""
+        msg_warn "Missing Python packages:"
+        for item in "${MISSING_PYTHON[@]}"; do
+            IFS='|' read -r pkg desc <<< "$item"
+            msg_bullet "${pkg} ${T_DIM}(${desc})${RST}"
+        done
+
+        echo ""
+        if prompt_yn "Install missing Python packages?"; then
+            for item in "${MISSING_PYTHON[@]}"; do
+                IFS='|' read -r pkg desc <<< "$item"
+                install_python_pkg "$pkg" "$desc"
+            done
+        else
+            msg_warn "Some features may not work without required Python packages"
+            return 1
+        fi
+    fi
+
+    return 0
 }
