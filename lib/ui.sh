@@ -1,5 +1,5 @@
 #!/bin/bash
-# WCURGUI - UI Helper Functions
+# MBTC-DASH - UI Helper Functions
 # Source this file for UI drawing functions
 
 # Get the directory of this script

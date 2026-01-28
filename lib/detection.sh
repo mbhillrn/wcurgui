@@ -1,33 +1,33 @@
 #!/bin/bash
-# WCURGUI - Bitcoin Core Detection
+# MBTC-DASH - Bitcoin Core Detection
 # Detects Bitcoin Core installation, datadir, conf, and auth settings
-# All detected values stored in WCURGUI_* environment variables
+# All detected values stored in MBTC_* environment variables
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/ui.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ENVIRONMENT VARIABLES (WCURGUI_ prefix to avoid conflicts)
+# ENVIRONMENT VARIABLES (MBTC_ prefix to avoid conflicts)
 # These are exported so other scripts can use them
 # ═══════════════════════════════════════════════════════════════════════════════
 
-export WCURGUI_CLI_PATH=""
-export WCURGUI_DATADIR=""
-export WCURGUI_CONF=""
-export WCURGUI_NETWORK="main"
-export WCURGUI_RPC_HOST="127.0.0.1"
-export WCURGUI_RPC_PORT="8332"
-export WCURGUI_RPC_USER=""
-export WCURGUI_RPC_PASS=""
-export WCURGUI_COOKIE_PATH=""
-export WCURGUI_VERSION=""
-export WCURGUI_RUNNING=0
+export MBTC_CLI_PATH=""
+export MBTC_DATADIR=""
+export MBTC_CONF=""
+export MBTC_NETWORK="main"
+export MBTC_RPC_HOST="127.0.0.1"
+export MBTC_RPC_PORT="8332"
+export MBTC_RPC_USER=""
+export MBTC_RPC_PASS=""
+export MBTC_COOKIE_PATH=""
+export MBTC_VERSION=""
+export MBTC_RUNNING=0
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-CACHE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wcurgui"
+CACHE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/mbtc-dash"
 CACHE_FILE="$CACHE_DIR/detection_cache.conf"
 
 # Common datadir locations
@@ -100,16 +100,16 @@ save_cache() {
     mkdir -p "$CACHE_DIR"
 
     cat > "$CACHE_FILE" << EOF
-# WCURGUI Detection Cache
+# MBTC-DASH Detection Cache
 # Generated: $(date)
-WCURGUI_CLI_PATH="$WCURGUI_CLI_PATH"
-WCURGUI_DATADIR="$WCURGUI_DATADIR"
-WCURGUI_CONF="$WCURGUI_CONF"
-WCURGUI_NETWORK="$WCURGUI_NETWORK"
-WCURGUI_RPC_HOST="$WCURGUI_RPC_HOST"
-WCURGUI_RPC_PORT="$WCURGUI_RPC_PORT"
-WCURGUI_RPC_USER="$WCURGUI_RPC_USER"
-WCURGUI_COOKIE_PATH="$WCURGUI_COOKIE_PATH"
+MBTC_CLI_PATH="$MBTC_CLI_PATH"
+MBTC_DATADIR="$MBTC_DATADIR"
+MBTC_CONF="$MBTC_CONF"
+MBTC_NETWORK="$MBTC_NETWORK"
+MBTC_RPC_HOST="$MBTC_RPC_HOST"
+MBTC_RPC_PORT="$MBTC_RPC_PORT"
+MBTC_RPC_USER="$MBTC_RPC_USER"
+MBTC_COOKIE_PATH="$MBTC_COOKIE_PATH"
 EOF
     chmod 600 "$CACHE_FILE"
     msg_ok "Configuration saved to cache"
@@ -122,7 +122,7 @@ load_cache() {
     source "$CACHE_FILE" 2>/dev/null || return 1
 
     # Check if we have at least CLI path
-    [[ -z "$WCURGUI_CLI_PATH" ]] && return 1
+    [[ -z "$MBTC_CLI_PATH" ]] && return 1
 
     return 0
 }
@@ -131,15 +131,15 @@ display_cached_config() {
     echo ""
     echo -e "${T_SECONDARY}${BOLD}Cached Configuration:${RST}"
     echo ""
-    print_kv "Bitcoin CLI" "${WCURGUI_CLI_PATH:-not set}" 18
-    print_kv "Data Directory" "${WCURGUI_DATADIR:-not set}" 18
-    print_kv "Config File" "${WCURGUI_CONF:-not set}" 18
-    print_kv "Network" "${WCURGUI_NETWORK:-main}" 18
-    print_kv "RPC Host:Port" "${WCURGUI_RPC_HOST:-127.0.0.1}:${WCURGUI_RPC_PORT:-8332}" 18
-    if [[ -n "$WCURGUI_COOKIE_PATH" ]]; then
-        print_kv "Auth" "Cookie ($WCURGUI_COOKIE_PATH)" 18
-    elif [[ -n "$WCURGUI_RPC_USER" ]]; then
-        print_kv "Auth" "User/Pass ($WCURGUI_RPC_USER)" 18
+    print_kv "Bitcoin CLI" "${MBTC_CLI_PATH:-not set}" 18
+    print_kv "Data Directory" "${MBTC_DATADIR:-not set}" 18
+    print_kv "Config File" "${MBTC_CONF:-not set}" 18
+    print_kv "Network" "${MBTC_NETWORK:-main}" 18
+    print_kv "RPC Host:Port" "${MBTC_RPC_HOST:-127.0.0.1}:${MBTC_RPC_PORT:-8332}" 18
+    if [[ -n "$MBTC_COOKIE_PATH" ]]; then
+        print_kv "Auth" "Cookie ($MBTC_COOKIE_PATH)" 18
+    elif [[ -n "$MBTC_RPC_USER" ]]; then
+        print_kv "Auth" "User/Pass ($MBTC_RPC_USER)" 18
     fi
     echo ""
 }
@@ -153,30 +153,30 @@ detect_running_process() {
     pinfo=$(pgrep -a bitcoind 2>/dev/null | head -1) || return 1
     [[ -z "$pinfo" ]] && return 1
 
-    WCURGUI_RUNNING=1
+    MBTC_RUNNING=1
 
     local args
     args=$(echo "$pinfo" | cut -d' ' -f3-)
 
     # Parse arguments from running process
-    [[ "$args" =~ -datadir=([^[:space:]]+) ]] && WCURGUI_DATADIR="${BASH_REMATCH[1]}"
-    [[ "$args" =~ -conf=([^[:space:]]+) ]] && WCURGUI_CONF="${BASH_REMATCH[1]}"
+    [[ "$args" =~ -datadir=([^[:space:]]+) ]] && MBTC_DATADIR="${BASH_REMATCH[1]}"
+    [[ "$args" =~ -conf=([^[:space:]]+) ]] && MBTC_CONF="${BASH_REMATCH[1]}"
 
     if [[ "$args" =~ -testnet ]]; then
-        WCURGUI_NETWORK="test"
-        WCURGUI_RPC_PORT="18332"
+        MBTC_NETWORK="test"
+        MBTC_RPC_PORT="18332"
     elif [[ "$args" =~ -signet ]]; then
-        WCURGUI_NETWORK="signet"
-        WCURGUI_RPC_PORT="38332"
+        MBTC_NETWORK="signet"
+        MBTC_RPC_PORT="38332"
     elif [[ "$args" =~ -regtest ]]; then
-        WCURGUI_NETWORK="regtest"
-        WCURGUI_RPC_PORT="18443"
+        MBTC_NETWORK="regtest"
+        MBTC_RPC_PORT="18443"
     fi
 
-    [[ "$args" =~ -rpcport=([0-9]+) ]] && WCURGUI_RPC_PORT="${BASH_REMATCH[1]}"
-    [[ "$args" =~ -rpcuser=([^[:space:]]+) ]] && WCURGUI_RPC_USER="${BASH_REMATCH[1]}"
-    [[ "$args" =~ -rpcpassword=([^[:space:]]+) ]] && WCURGUI_RPC_PASS="${BASH_REMATCH[1]}"
-    [[ "$args" =~ -rpccookiefile=([^[:space:]]+) ]] && WCURGUI_COOKIE_PATH="${BASH_REMATCH[1]}"
+    [[ "$args" =~ -rpcport=([0-9]+) ]] && MBTC_RPC_PORT="${BASH_REMATCH[1]}"
+    [[ "$args" =~ -rpcuser=([^[:space:]]+) ]] && MBTC_RPC_USER="${BASH_REMATCH[1]}"
+    [[ "$args" =~ -rpcpassword=([^[:space:]]+) ]] && MBTC_RPC_PASS="${BASH_REMATCH[1]}"
+    [[ "$args" =~ -rpccookiefile=([^[:space:]]+) ]] && MBTC_COOKIE_PATH="${BASH_REMATCH[1]}"
 
     return 0
 }
@@ -199,10 +199,10 @@ detect_systemd_service() {
         local exec_start
         exec_start=$(systemctl show "$service" --property=ExecStart 2>/dev/null)
 
-        [[ "$exec_start" =~ -datadir=([^[:space:]\;]+) ]] && WCURGUI_DATADIR="${BASH_REMATCH[1]}"
-        [[ "$exec_start" =~ -conf=([^[:space:]\;]+) ]] && WCURGUI_CONF="${BASH_REMATCH[1]}"
+        [[ "$exec_start" =~ -datadir=([^[:space:]\;]+) ]] && MBTC_DATADIR="${BASH_REMATCH[1]}"
+        [[ "$exec_start" =~ -conf=([^[:space:]\;]+) ]] && MBTC_CONF="${BASH_REMATCH[1]}"
 
-        [[ -n "$WCURGUI_DATADIR" || -n "$WCURGUI_CONF" ]] && return 0
+        [[ -n "$MBTC_DATADIR" || -n "$MBTC_CONF" ]] && return 0
     done
 
     return 1
@@ -219,8 +219,8 @@ detect_bitcoin_cli() {
     local exit_code=$?
 
     if [[ $exit_code -eq 0 ]]; then
-        WCURGUI_CLI_PATH=$(command -v bitcoin-cli)
-        WCURGUI_VERSION=$(echo "$result" | head -1 | grep -oP 'v[\d.]+' || echo "unknown")
+        MBTC_CLI_PATH=$(command -v bitcoin-cli)
+        MBTC_VERSION=$(echo "$result" | head -1 | grep -oP 'v[\d.]+' || echo "unknown")
         return 0
     fi
 
@@ -231,8 +231,8 @@ detect_bitcoin_cli() {
                 local test_result
                 test_result=$("$dir/bitcoin-cli" --version 2>&1)
                 if [[ $? -eq 0 ]]; then
-                    WCURGUI_CLI_PATH="$dir/bitcoin-cli"
-                    WCURGUI_VERSION=$(echo "$test_result" | head -1 | grep -oP 'v[\d.]+' || echo "unknown")
+                    MBTC_CLI_PATH="$dir/bitcoin-cli"
+                    MBTC_VERSION=$(echo "$test_result" | head -1 | grep -oP 'v[\d.]+' || echo "unknown")
                     return 0
                 fi
             fi
@@ -241,8 +241,8 @@ detect_bitcoin_cli() {
     fi
 
     # Some other error but cli exists
-    WCURGUI_CLI_PATH=$(command -v bitcoin-cli 2>/dev/null)
-    [[ -n "$WCURGUI_CLI_PATH" ]] && return 0
+    MBTC_CLI_PATH=$(command -v bitcoin-cli 2>/dev/null)
+    [[ -n "$MBTC_CLI_PATH" ]] && return 0
 
     return 1
 }
@@ -259,24 +259,24 @@ validate_conf_file() {
 
 find_conf_file() {
     # Already found?
-    [[ -n "$WCURGUI_CONF" ]] && validate_conf_file "$WCURGUI_CONF" && return 0
+    [[ -n "$MBTC_CONF" ]] && validate_conf_file "$MBTC_CONF" && return 0
 
     # Check in datadir first if we have it
-    if [[ -n "$WCURGUI_DATADIR" && -f "$WCURGUI_DATADIR/bitcoin.conf" ]]; then
-        WCURGUI_CONF="$WCURGUI_DATADIR/bitcoin.conf"
+    if [[ -n "$MBTC_DATADIR" && -f "$MBTC_DATADIR/bitcoin.conf" ]]; then
+        MBTC_CONF="$MBTC_DATADIR/bitcoin.conf"
         return 0
     fi
 
     # Check common locations
     for conf in "${CONF_CANDIDATES[@]}"; do
         if validate_conf_file "$conf"; then
-            WCURGUI_CONF="$conf"
+            MBTC_CONF="$conf"
             # Also grab datadir from same location if not set
-            if [[ -z "$WCURGUI_DATADIR" ]]; then
+            if [[ -z "$MBTC_DATADIR" ]]; then
                 local dir
                 dir=$(dirname "$conf")
                 if validate_datadir "$dir"; then
-                    WCURGUI_DATADIR="$dir"
+                    MBTC_DATADIR="$dir"
                 fi
             fi
             return 0
@@ -298,15 +298,15 @@ parse_conf_file() {
         value=$(echo "$value" | xargs)
 
         case "$key" in
-            datadir)     [[ -z "$WCURGUI_DATADIR" ]] && WCURGUI_DATADIR="$value" ;;
-            testnet)     [[ "$value" == "1" ]] && WCURGUI_NETWORK="test" && WCURGUI_RPC_PORT="18332" ;;
-            signet)      [[ "$value" == "1" ]] && WCURGUI_NETWORK="signet" && WCURGUI_RPC_PORT="38332" ;;
-            regtest)     [[ "$value" == "1" ]] && WCURGUI_NETWORK="regtest" && WCURGUI_RPC_PORT="18443" ;;
-            rpcuser)     WCURGUI_RPC_USER="$value" ;;
-            rpcpassword) WCURGUI_RPC_PASS="$value" ;;
-            rpcport)     WCURGUI_RPC_PORT="$value" ;;
-            rpcbind)     [[ "$WCURGUI_RPC_HOST" == "127.0.0.1" ]] && WCURGUI_RPC_HOST="$value" ;;
-            rpccookiefile) WCURGUI_COOKIE_PATH="$value" ;;
+            datadir)     [[ -z "$MBTC_DATADIR" ]] && MBTC_DATADIR="$value" ;;
+            testnet)     [[ "$value" == "1" ]] && MBTC_NETWORK="test" && MBTC_RPC_PORT="18332" ;;
+            signet)      [[ "$value" == "1" ]] && MBTC_NETWORK="signet" && MBTC_RPC_PORT="38332" ;;
+            regtest)     [[ "$value" == "1" ]] && MBTC_NETWORK="regtest" && MBTC_RPC_PORT="18443" ;;
+            rpcuser)     MBTC_RPC_USER="$value" ;;
+            rpcpassword) MBTC_RPC_PASS="$value" ;;
+            rpcport)     MBTC_RPC_PORT="$value" ;;
+            rpcbind)     [[ "$MBTC_RPC_HOST" == "127.0.0.1" ]] && MBTC_RPC_HOST="$value" ;;
+            rpccookiefile) MBTC_COOKIE_PATH="$value" ;;
         esac
     done < "$conf"
     return 0
@@ -356,8 +356,8 @@ search_conf_file() {
     fi
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice < i )); then
-        WCURGUI_CONF="${found_array[$((choice-1))]}"
-        msg_ok "Selected: $WCURGUI_CONF"
+        MBTC_CONF="${found_array[$((choice-1))]}"
+        msg_ok "Selected: $MBTC_CONF"
         return 0
     fi
 
@@ -387,28 +387,28 @@ validate_datadir() {
 
 find_datadir() {
     # Already found?
-    [[ -n "$WCURGUI_DATADIR" ]] && validate_datadir "$WCURGUI_DATADIR" && return 0
+    [[ -n "$MBTC_DATADIR" ]] && validate_datadir "$MBTC_DATADIR" && return 0
 
     # If we have conf, check its directory
-    if [[ -n "$WCURGUI_CONF" ]]; then
+    if [[ -n "$MBTC_CONF" ]]; then
         local conf_dir
-        conf_dir=$(dirname "$WCURGUI_CONF")
+        conf_dir=$(dirname "$MBTC_CONF")
         if validate_datadir "$conf_dir"; then
-            WCURGUI_DATADIR="$conf_dir"
+            MBTC_DATADIR="$conf_dir"
             return 0
         fi
     fi
 
     # Check default
     if validate_datadir "$HOME/.bitcoin"; then
-        WCURGUI_DATADIR="$HOME/.bitcoin"
+        MBTC_DATADIR="$HOME/.bitcoin"
         return 0
     fi
 
     # Check candidates
     for dir in "${DATADIR_CANDIDATES[@]}"; do
         if validate_datadir "$dir"; then
-            WCURGUI_DATADIR="$dir"
+            MBTC_DATADIR="$dir"
             return 0
         fi
     done
@@ -418,7 +418,7 @@ find_datadir() {
         [[ -d "$mount" ]] || continue
         for subdir in bitcoin .bitcoin bitcoind; do
             if validate_datadir "$mount/$subdir"; then
-                WCURGUI_DATADIR="$mount/$subdir"
+                MBTC_DATADIR="$mount/$subdir"
                 return 0
             fi
         done
@@ -473,12 +473,12 @@ search_datadir() {
     fi
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice < i )); then
-        WCURGUI_DATADIR="${found_array[$((choice-1))]}"
+        MBTC_DATADIR="${found_array[$((choice-1))]}"
 
         # Confirm with user
         echo ""
-        if prompt_yn "Use $WCURGUI_DATADIR as data directory?"; then
-            msg_ok "Selected: $WCURGUI_DATADIR"
+        if prompt_yn "Use $MBTC_DATADIR as data directory?"; then
+            msg_ok "Selected: $MBTC_DATADIR"
             return 0
         else
             return 1
@@ -506,17 +506,17 @@ get_network_datadir() {
 }
 
 find_cookie() {
-    [[ -n "$WCURGUI_COOKIE_PATH" && -f "$WCURGUI_COOKIE_PATH" ]] && return 0
+    [[ -n "$MBTC_COOKIE_PATH" && -f "$MBTC_COOKIE_PATH" ]] && return 0
 
     local effective_datadir
-    effective_datadir=$(get_network_datadir "$WCURGUI_DATADIR" "$WCURGUI_NETWORK")
+    effective_datadir=$(get_network_datadir "$MBTC_DATADIR" "$MBTC_NETWORK")
 
     if [[ -f "$effective_datadir/.cookie" ]]; then
-        WCURGUI_COOKIE_PATH="$effective_datadir/.cookie"
+        MBTC_COOKIE_PATH="$effective_datadir/.cookie"
         return 0
     fi
 
-    [[ -f "$WCURGUI_DATADIR/.cookie" ]] && WCURGUI_COOKIE_PATH="$WCURGUI_DATADIR/.cookie" && return 0
+    [[ -f "$MBTC_DATADIR/.cookie" ]] && MBTC_COOKIE_PATH="$MBTC_DATADIR/.cookie" && return 0
 
     return 1
 }
@@ -526,12 +526,12 @@ find_cookie() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 get_cli_command() {
-    local cmd="${WCURGUI_CLI_PATH:-bitcoin-cli}"
+    local cmd="${MBTC_CLI_PATH:-bitcoin-cli}"
 
-    [[ -n "$WCURGUI_DATADIR" ]] && cmd+=" -datadir=$WCURGUI_DATADIR"
-    [[ -n "$WCURGUI_CONF" ]] && cmd+=" -conf=$WCURGUI_CONF"
+    [[ -n "$MBTC_DATADIR" ]] && cmd+=" -datadir=$MBTC_DATADIR"
+    [[ -n "$MBTC_CONF" ]] && cmd+=" -conf=$MBTC_CONF"
 
-    case "$WCURGUI_NETWORK" in
+    case "$MBTC_NETWORK" in
         test)   cmd+=" -testnet" ;;
         signet) cmd+=" -signet" ;;
         regtest) cmd+=" -regtest" ;;
@@ -577,15 +577,15 @@ manual_enter_conf() {
     input="${input/#\~/$HOME}"
 
     if [[ -f "$input" ]]; then
-        WCURGUI_CONF="$input"
-        msg_ok "Config file set: $WCURGUI_CONF"
+        MBTC_CONF="$input"
+        msg_ok "Config file set: $MBTC_CONF"
 
         # Check if datadir is in same location
         local conf_dir
         conf_dir=$(dirname "$input")
-        if [[ -z "$WCURGUI_DATADIR" ]] && validate_datadir "$conf_dir"; then
-            WCURGUI_DATADIR="$conf_dir"
-            msg_ok "Also found datadir: $WCURGUI_DATADIR"
+        if [[ -z "$MBTC_DATADIR" ]] && validate_datadir "$conf_dir"; then
+            MBTC_DATADIR="$conf_dir"
+            msg_ok "Also found datadir: $MBTC_DATADIR"
         fi
         return 0
     else
@@ -611,19 +611,19 @@ manual_enter_datadir() {
     input="${input/#\~/$HOME}"
 
     if validate_datadir "$input"; then
-        WCURGUI_DATADIR="$input"
-        msg_ok "Data directory set: $WCURGUI_DATADIR"
+        MBTC_DATADIR="$input"
+        msg_ok "Data directory set: $MBTC_DATADIR"
 
         # Check for conf in this dir
-        if [[ -z "$WCURGUI_CONF" && -f "$input/bitcoin.conf" ]]; then
-            WCURGUI_CONF="$input/bitcoin.conf"
-            msg_ok "Also found config: $WCURGUI_CONF"
+        if [[ -z "$MBTC_CONF" && -f "$input/bitcoin.conf" ]]; then
+            MBTC_CONF="$input/bitcoin.conf"
+            msg_ok "Also found config: $MBTC_CONF"
         fi
         return 0
     elif [[ -d "$input" ]]; then
         msg_warn "Directory exists but doesn't look like a Bitcoin datadir"
         if prompt_yn "Use it anyway?"; then
-            WCURGUI_DATADIR="$input"
+            MBTC_DATADIR="$input"
             return 0
         fi
         return 1
@@ -642,24 +642,24 @@ display_detection_results() {
     print_header "Detection Results"
     echo ""
 
-    print_kv "Bitcoin CLI" "${WCURGUI_CLI_PATH:-not found}" 18
-    print_kv "Version" "${WCURGUI_VERSION:-unknown}" 18
-    print_kv "Data Directory" "${WCURGUI_DATADIR:-not found}" 18
-    print_kv "Config File" "${WCURGUI_CONF:-not found}" 18
-    print_kv "Network" "${WCURGUI_NETWORK}" 18
-    print_kv "RPC Host:Port" "${WCURGUI_RPC_HOST}:${WCURGUI_RPC_PORT}" 18
+    print_kv "Bitcoin CLI" "${MBTC_CLI_PATH:-not found}" 18
+    print_kv "Version" "${MBTC_VERSION:-unknown}" 18
+    print_kv "Data Directory" "${MBTC_DATADIR:-not found}" 18
+    print_kv "Config File" "${MBTC_CONF:-not found}" 18
+    print_kv "Network" "${MBTC_NETWORK}" 18
+    print_kv "RPC Host:Port" "${MBTC_RPC_HOST}:${MBTC_RPC_PORT}" 18
 
-    if [[ -n "$WCURGUI_COOKIE_PATH" && -f "$WCURGUI_COOKIE_PATH" ]]; then
+    if [[ -n "$MBTC_COOKIE_PATH" && -f "$MBTC_COOKIE_PATH" ]]; then
         print_kv "Auth Method" "Cookie" 18
-        print_kv "Cookie File" "$WCURGUI_COOKIE_PATH" 18
-    elif [[ -n "$WCURGUI_RPC_USER" ]]; then
+        print_kv "Cookie File" "$MBTC_COOKIE_PATH" 18
+    elif [[ -n "$MBTC_RPC_USER" ]]; then
         print_kv "Auth Method" "User/Password" 18
-        print_kv "RPC User" "$WCURGUI_RPC_USER" 18
+        print_kv "RPC User" "$MBTC_RPC_USER" 18
     else
         print_kv "Auth Method" "Default" 18
     fi
 
-    if [[ "$WCURGUI_RUNNING" -eq 1 ]]; then
+    if [[ "$MBTC_RUNNING" -eq 1 ]]; then
         echo ""
         echo -e "  ${T_SUCCESS}${SYM_CHECK} bitcoind is running${RST}"
     fi
@@ -702,8 +702,8 @@ run_detection() {
                 # Still need to get version and test
                 detect_bitcoin_cli
                 find_cookie
-                if [[ -n "$WCURGUI_CONF" ]]; then
-                    parse_conf_file "$WCURGUI_CONF"
+                if [[ -n "$MBTC_CONF" ]]; then
+                    parse_conf_file "$MBTC_CONF"
                 fi
                 print_section_end
                 # Skip to RPC test
@@ -712,24 +712,24 @@ run_detection() {
             2)
                 msg_info "Running auto-detection..."
                 # Clear cached values
-                WCURGUI_CLI_PATH=""
-                WCURGUI_DATADIR=""
-                WCURGUI_CONF=""
+                MBTC_CLI_PATH=""
+                MBTC_DATADIR=""
+                MBTC_CONF=""
                 print_section_end
                 ;;
             3)
                 msg_info "Manual configuration..."
-                WCURGUI_CLI_PATH=""
-                WCURGUI_DATADIR=""
-                WCURGUI_CONF=""
+                MBTC_CLI_PATH=""
+                MBTC_DATADIR=""
+                MBTC_CONF=""
                 print_section_end
                 goto_manual=1
                 ;;
             *)
                 msg_info "Running auto-detection..."
-                WCURGUI_CLI_PATH=""
-                WCURGUI_DATADIR=""
-                WCURGUI_CONF=""
+                MBTC_CLI_PATH=""
+                MBTC_DATADIR=""
+                MBTC_CONF=""
                 print_section_end
                 ;;
         esac
@@ -755,7 +755,7 @@ run_detection() {
         done
 
         # Manual datadir if not found
-        if [[ -z "$WCURGUI_DATADIR" ]]; then
+        if [[ -z "$MBTC_DATADIR" ]]; then
             while true; do
                 manual_enter_datadir
                 local result=$?
@@ -775,8 +775,8 @@ run_detection() {
         start_spinner "Scanning for bitcoind process"
         if detect_running_process; then
             stop_spinner 0 "Found running bitcoind (PID: $(pgrep bitcoind | head -1))"
-            [[ -n "$WCURGUI_DATADIR" ]] && msg_ok "Extracted datadir: $WCURGUI_DATADIR"
-            [[ -n "$WCURGUI_CONF" ]] && msg_ok "Extracted conf: $WCURGUI_CONF"
+            [[ -n "$MBTC_DATADIR" ]] && msg_ok "Extracted datadir: $MBTC_DATADIR"
+            [[ -n "$MBTC_CONF" ]] && msg_ok "Extracted conf: $MBTC_CONF"
         else
             stop_spinner 0 "bitcoind not running"
 
@@ -784,8 +784,8 @@ run_detection() {
             msg_info "Checking systemd services..."
             if detect_systemd_service; then
                 msg_ok "Found configuration from systemd service"
-                [[ -n "$WCURGUI_DATADIR" ]] && msg_ok "Datadir: $WCURGUI_DATADIR"
-                [[ -n "$WCURGUI_CONF" ]] && msg_ok "Conf: $WCURGUI_CONF"
+                [[ -n "$MBTC_DATADIR" ]] && msg_ok "Datadir: $MBTC_DATADIR"
+                [[ -n "$MBTC_CONF" ]] && msg_ok "Conf: $MBTC_CONF"
             else
                 msg_info "No systemd bitcoin service found"
             fi
@@ -799,7 +799,7 @@ run_detection() {
 
         start_spinner "Searching common locations"
         if find_conf_file; then
-            stop_spinner 0 "Found: $WCURGUI_CONF"
+            stop_spinner 0 "Found: $MBTC_CONF"
         else
             stop_spinner 1 "Config file not found in common locations"
 
@@ -834,10 +834,10 @@ run_detection() {
         fi
 
         # Parse config if we have it
-        if [[ -n "$WCURGUI_CONF" && -f "$WCURGUI_CONF" ]]; then
+        if [[ -n "$MBTC_CONF" && -f "$MBTC_CONF" ]]; then
             msg_info "Parsing config file..."
-            parse_conf_file "$WCURGUI_CONF"
-            [[ -n "$WCURGUI_DATADIR" ]] && msg_ok "Found datadir in config: $WCURGUI_DATADIR"
+            parse_conf_file "$MBTC_CONF"
+            [[ -n "$MBTC_DATADIR" ]] && msg_ok "Found datadir in config: $MBTC_DATADIR"
         fi
         print_section_end
 
@@ -846,12 +846,12 @@ run_detection() {
         # ─────────────────────────────────────────────────────────────────────
         print_section "Step 4: Locating Data Directory"
 
-        if [[ -n "$WCURGUI_DATADIR" ]] && validate_datadir "$WCURGUI_DATADIR"; then
-            msg_ok "Already found: $WCURGUI_DATADIR"
+        if [[ -n "$MBTC_DATADIR" ]] && validate_datadir "$MBTC_DATADIR"; then
+            msg_ok "Already found: $MBTC_DATADIR"
         else
             start_spinner "Searching common locations"
             if find_datadir; then
-                stop_spinner 0 "Found: $WCURGUI_DATADIR"
+                stop_spinner 0 "Found: $MBTC_DATADIR"
             else
                 stop_spinner 1 "Data directory not found in common locations"
 
@@ -894,7 +894,7 @@ run_detection() {
 
         start_spinner "Checking bitcoin-cli"
         if detect_bitcoin_cli; then
-            stop_spinner 0 "Found: $WCURGUI_CLI_PATH ($WCURGUI_VERSION)"
+            stop_spinner 0 "Found: $MBTC_CLI_PATH ($MBTC_VERSION)"
         else
             stop_spinner 1 "bitcoin-cli not found"
             msg_err "Bitcoin Core does not appear to be installed"
@@ -910,9 +910,9 @@ run_detection() {
     print_section "Step 6: Checking Authentication"
 
     find_cookie
-    if [[ -n "$WCURGUI_COOKIE_PATH" && -f "$WCURGUI_COOKIE_PATH" ]]; then
-        msg_ok "Cookie auth: $WCURGUI_COOKIE_PATH"
-    elif [[ -n "$WCURGUI_RPC_USER" ]]; then
+    if [[ -n "$MBTC_COOKIE_PATH" && -f "$MBTC_COOKIE_PATH" ]]; then
+        msg_ok "Cookie auth: $MBTC_COOKIE_PATH"
+    elif [[ -n "$MBTC_RPC_USER" ]]; then
         msg_ok "User/password auth configured"
     else
         msg_info "Using default authentication"

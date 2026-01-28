@@ -1,5 +1,5 @@
 #!/bin/bash
-# WCURGUI - Color and Style Definitions
+# MBTC-DASH - Color and Style Definitions
 # Source this file to get access to colors and styling
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -58,6 +58,27 @@ export BLINK='\033[5m'
 export REVERSE='\033[7m'
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# EXTENDED BLUE PALETTE (256 colors)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+export BLUE_DARK='\033[38;5;17m'
+export BLUE_NAVY='\033[38;5;18m'
+export BLUE_MED='\033[38;5;20m'
+export BLUE_ROYAL='\033[38;5;21m'
+export BLUE_BRIGHT='\033[38;5;27m'
+export BLUE_DODGER='\033[38;5;33m'
+export BLUE_SKY='\033[38;5;39m'
+export BLUE_STEEL='\033[38;5;67m'
+export BLUE_LIGHT='\033[38;5;75m'
+export BLUE_ICE='\033[38;5;117m'
+
+# Bold blues
+export BBLUE_BRIGHT='\033[1;38;5;27m'
+export BBLUE_DODGER='\033[1;38;5;33m'
+export BBLUE_SKY='\033[1;38;5;39m'
+export BBLUE_LIGHT='\033[1;38;5;75m'
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # UNICODE BOX DRAWING CHARACTERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -109,20 +130,22 @@ export SPINNER_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '�
 export DOT_FRAMES=('   ' '.  ' '.. ' '...')
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# THEME - Bitcoin Orange
+# THEME - Blue (MBTC-DASH)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Bitcoin orange approximation in terminal
-export ORANGE='\033[38;5;208m'
-export BORANGE='\033[1;38;5;208m'
-export BG_ORANGE='\033[48;5;208m'
+# Primary theme colors - BLUE based
+export T_PRIMARY="$BBLUE_DODGER"        # Main headers, banners
+export T_SECONDARY="$BBLUE_SKY"         # Section headers, accents
+export T_ACCENT="$BLUE_LIGHT"           # Highlights
+export T_SUCCESS="$BGREEN"              # Success messages, checkmarks
+export T_ERROR="$BRED"                  # Errors, failures
+export T_WARN="$BYELLOW"                # Warnings
+export T_INFO="$BCYAN"                  # Info messages
+export T_DIM="$DWHITE"                  # Dimmed text, hints
+export T_PINK="$BPURPLE"                # Occasional accent (sparingly)
 
-# Theme colors
-export T_PRIMARY="$BORANGE"
-export T_SECONDARY="$BCYAN"
-export T_SUCCESS="$BGREEN"
-export T_ERROR="$BRED"
-export T_WARN="$BYELLOW"
-export T_INFO="$BBLUE"
-export T_DIM="$DWHITE"
-export T_ACCENT="$BPURPLE"
+# Table colors
+export T_TABLE_HEADER="$BBLUE_BRIGHT"   # Table headers
+export T_TABLE_BORDER="$BLUE_STEEL"     # Table borders
+export T_TABLE_ROW="$WHITE"             # Table row text
+export T_TABLE_ALT="$DWHITE"            # Alternating rows

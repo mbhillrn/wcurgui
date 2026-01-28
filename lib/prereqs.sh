@@ -1,5 +1,5 @@
 #!/bin/bash
-# WCURGUI - Prerequisites Checker
+# MBTC-DASH - Prerequisites Checker
 # Checks for required tools and offers to install missing ones
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,6 +15,7 @@ source "$SCRIPT_DIR/ui.sh"
 declare -a PREREQS=(
     "jq|JSON parser for RPC responses|apt install -y jq|dnf install -y jq|pacman -S --noconfirm jq|1"
     "curl|HTTP client for API calls|apt install -y curl|dnf install -y curl|pacman -S --noconfirm curl|1"
+    "sqlite3|SQLite database for caching|apt install -y sqlite3|dnf install -y sqlite|pacman -S --noconfirm sqlite|1"
     "ss|Socket statistics (network info)|apt install -y iproute2|dnf install -y iproute|pacman -S --noconfirm iproute2|0"
     "bc|Calculator for math operations|apt install -y bc|dnf install -y bc|pacman -S --noconfirm bc|0"
 )
