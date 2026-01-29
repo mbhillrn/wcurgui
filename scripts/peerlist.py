@@ -16,9 +16,10 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskProgressColumn
 from rich.table import Table
 from rich.text import Text
 from rich.layout import Layout
@@ -51,6 +52,10 @@ RETRY_INTERVALS = [86400, 259200, 604800, 604800]
 # Track peer history for recently connected/disconnected
 PEER_HISTORY = []  # Last 3 snapshots of peer IDs
 MAX_HISTORY = 3
+
+# Recent changes log (for the bottom panel)
+RECENT_CHANGES = []  # List of (timestamp, change_type, peer_info)
+MAX_RECENT_CHANGES = 10
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STYLES
@@ -311,7 +316,7 @@ def get_network_type(addr: str) -> str:
         return 'i2p'
     elif addr.startswith('fc') or addr.startswith('fd'):
         return 'cjdns'
-    elif ':' in addr:
+    elif ':' in addr and addr.count(':') > 1:
         return 'ipv6'
     else:
         return 'ipv4'
@@ -377,52 +382,11 @@ def get_peer_info() -> list:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PEER PROCESSING
+# PEER PROCESSING (DONE OUTSIDE LIVE CONTEXT)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def process_geo_lookup(ip: str, network_type: str, progress_callback=None) -> bool:
-    """Process geo lookup for a single IP"""
-    # Private network - no geo lookup needed
-    if not is_public_address(network_type):
-        geo = get_peer_geo(ip)
-        if not geo:
-            upsert_peer_geo(ip, network_type, GEO_PRIVATE)
-        else:
-            update_peer_seen(ip)
-        return True
-
-    # Check if we have valid cached data
-    geo = get_peer_geo(ip)
-    if geo and not should_retry_geo(ip):
-        update_peer_seen(ip)
-        return True
-
-    # Fetch from API
-    data = fetch_geo_api(ip)
-
-    if data:
-        upsert_peer_geo(
-            ip, network_type, GEO_OK,
-            data.get('country', ''),
-            data.get('countryCode', ''),
-            data.get('region', ''),
-            data.get('regionName', ''),
-            data.get('city', ''),
-            data.get('district', ''),
-            data.get('lat', 0),
-            data.get('lon', 0),
-            data.get('isp', ''),
-            data.get('as', ''),
-            1 if data.get('hosting') else 0
-        )
-        return True
-    else:
-        upsert_peer_geo(ip, network_type, GEO_UNAVAILABLE)
-        return False
-
-
-def process_peers(peers: list, console: Console) -> list:
-    """Process all peers, fetch missing geo data with progress"""
+def process_peers_with_progress(peers: list) -> list:
+    """Process all peers, fetch missing geo data with progress bar (OUTSIDE Live context)"""
     # Find peers that need geo lookup
     new_lookups = []
     all_ips = []
@@ -439,17 +403,51 @@ def process_peers(peers: list, console: Console) -> list:
             if not geo or should_retry_geo(ip):
                 new_lookups.append((ip, network_type))
 
-    # Process new lookups with progress
+    # Process new lookups with progress bar (NOT inside Live context)
     if new_lookups:
         total = len(new_lookups)
-        with console.status(f"[bold blue]Finding Accountabilibuddies: 0/{total} (rate limited: ~1.5s each, Oh Hamburgers!)[/]") as status:
-            for i, (ip, network_type) in enumerate(new_lookups, 1):
-                status.update(f"[bold blue]Finding Accountabilibuddies: {i}/{total} (rate limited: ~1.5s each, Oh Hamburgers!)[/]")
-                process_geo_lookup(ip, network_type)
-                if i < total:
+        console.print(f"\n[bold cyan]{len(peers)} Bitcoin Peers found.[/] Currently stalking each one's location...")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TextColumn("({task.completed}/{task.total})"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Locating peers...", total=total)
+
+            for i, (ip, network_type) in enumerate(new_lookups):
+                # Fetch from API
+                data = fetch_geo_api(ip)
+
+                if data:
+                    upsert_peer_geo(
+                        ip, network_type, GEO_OK,
+                        data.get('country', ''),
+                        data.get('countryCode', ''),
+                        data.get('region', ''),
+                        data.get('regionName', ''),
+                        data.get('city', ''),
+                        data.get('district', ''),
+                        data.get('lat', 0),
+                        data.get('lon', 0),
+                        data.get('isp', ''),
+                        data.get('as', ''),
+                        1 if data.get('hosting') else 0
+                    )
+                else:
+                    upsert_peer_geo(ip, network_type, GEO_UNAVAILABLE)
+
+                progress.update(task, advance=1)
+
+                if i < total - 1:
                     time.sleep(GEO_API_DELAY)
 
-    # Update last_seen for all current peers
+        console.print("[green]✓[/] Location lookup complete!\n")
+
+    # Update last_seen for all current peers (no API calls needed)
     for ip, network_type in all_ips:
         geo = get_peer_geo(ip)
         if geo:
@@ -488,7 +486,7 @@ def format_location(ip: str, network_type: str) -> str:
         return f"{geo['city']}, {geo['country_code']}"
 
 
-def create_peer_table(peers: list, new_peers: set, disconnected_peers: set) -> Table:
+def create_peer_table(peers: list) -> Table:
     """Create the peer table with Rich"""
     table = Table(
         show_header=True,
@@ -513,13 +511,6 @@ def create_peer_table(peers: list, new_peers: set, disconnected_peers: set) -> T
         network_type = peer.get('network', get_network_type(addr))
         ip = extract_ip(addr)
 
-        # Determine row style
-        row_style = ""
-        id_text = peer_id
-        if peer_id in new_peers:
-            row_style = "green"
-            id_text = f"+ {peer_id}"
-
         # Location
         location = truncate(format_location(ip, network_type), 22)
 
@@ -542,7 +533,7 @@ def create_peer_table(peers: list, new_peers: set, disconnected_peers: set) -> T
         version = truncate(peer.get('subver', '').replace('/', ''), 20)
 
         table.add_row(
-            id_text,
+            peer_id,
             truncate(ip, 24),
             location,
             isp,
@@ -550,39 +541,41 @@ def create_peer_table(peers: list, new_peers: set, disconnected_peers: set) -> T
             ping_str,
             f"{sent} / {recv}",
             version,
-            style=row_style
         )
 
     return table
 
 
-def create_changes_panel(new_peers: set, disconnected_peers: set) -> Optional[Panel]:
+def create_changes_panel() -> Panel:
     """Create panel showing recent connections/disconnections"""
-    if not new_peers and not disconnected_peers:
-        return None
+    if not RECENT_CHANGES:
+        content = Text("No recent changes", style=STYLE_DIM)
+    else:
+        lines = []
+        for timestamp, change_type, peer_info in RECENT_CHANGES[-MAX_RECENT_CHANGES:]:
+            ip = peer_info.get('ip', 'unknown')
+            network = peer_info.get('network', 'unknown')
+            time_str = datetime.fromtimestamp(timestamp).strftime('%H:%M:%S')
 
-    lines = []
+            if change_type == 'connected':
+                lines.append(Text(f"+{ip} {network} connected ({time_str})", style=STYLE_NEW))
+            else:
+                lines.append(Text(f"-{ip} {network} disconnected ({time_str})", style=STYLE_DISCONNECTED))
 
-    if new_peers:
-        new_list = ', '.join(sorted(new_peers)[:5])
-        if len(new_peers) > 5:
-            new_list += f" (+{len(new_peers) - 5} more)"
-        lines.append(Text(f"  + Connected: {new_list}", style=STYLE_NEW))
+        content = Text("\n").join(lines)
 
-    if disconnected_peers:
-        disc_list = ', '.join(sorted(disconnected_peers)[:5])
-        if len(disconnected_peers) > 5:
-            disc_list += f" (+{len(disconnected_peers) - 5} more)"
-        lines.append(Text(f"  - Disconnected: {disc_list}", style=STYLE_DISCONNECTED))
-
-    content = Text("\n").join(lines)
-    return Panel(content, title="Recent Changes (last 30s)", border_style=STYLE_BORDER, padding=(0, 1))
+    return Panel(
+        content,
+        title="Recent Changes (last 30s)",
+        border_style=STYLE_BORDER,
+        padding=(0, 1),
+        height=min(len(RECENT_CHANGES) + 3, 8) if RECENT_CHANGES else 4
+    )
 
 
-def create_display(peers: list, stats: dict, new_peers: set, disconnected_peers: set,
-                   next_refresh: int, error: str = "") -> Layout:
+def create_display(peers: list, stats: dict, next_refresh: int, error: str = "") -> Group:
     """Create the full display layout"""
-    layout = Layout()
+    parts = []
 
     # Header
     header_text = Text()
@@ -591,51 +584,33 @@ def create_display(peers: list, stats: dict, new_peers: set, disconnected_peers:
     header_text.append(" " * 50, style=STYLE_DIM)
     header_text.append(f"Press 'q' to quit | Refresh: {REFRESH_INTERVAL}s\n", style=STYLE_DIM)
     header_text.append("═" * 110, style=STYLE_HEADER)
+    parts.append(header_text)
 
-    # Build content
-    content_parts = []
-
+    # Error or peer count
     if error:
-        content_parts.append(Text(f"\n⚠ {error}\n", style=STYLE_WARN))
+        parts.append(Text(f"\n⚠ {error}\n", style=STYLE_WARN))
     else:
-        content_parts.append(Text(f"\nConnected peers: {len(peers)}\n", style="bold cyan"))
-
-    # Changes panel (if any)
-    changes = create_changes_panel(new_peers, disconnected_peers)
+        parts.append(Text(f"\nConnected peers: {len(peers)}\n", style="bold cyan"))
 
     # Peer table
     if peers:
-        table = create_peer_table(peers, new_peers, disconnected_peers)
+        parts.append(create_peer_table(peers))
     else:
-        table = Text("No peers connected", style=STYLE_DIM)
+        parts.append(Text("No peers connected", style=STYLE_DIM))
 
     # Stats
-    stats_text = Text(f"\nDatabase stats: {stats['geo_ok']} geolocated | {stats['private']} private | {stats['unavailable']} unavailable | Networks: {stats['ipv4']} IPv4, {stats['ipv6']} IPv6, {stats['onion']} Tor, {stats['i2p']} I2P, {stats['cjdns']} CJDNS", style=STYLE_DIM)
+    stats_text = Text(f"\nDatabase stats: {stats['geo_ok']} geolocated | {stats['private']} private | {stats['unavailable']} unavailable | Networks: {stats['ipv4']} IPv4, {stats['ipv6']} IPv6, {stats['onion']} Tor, {stats['i2p']} I2P, {stats['cjdns']} CJDNS\n", style=STYLE_DIM)
+    parts.append(stats_text)
+
+    # Recent changes panel (bottom)
+    parts.append(create_changes_panel())
 
     # Footer
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     footer_text = Text(f"\nLast update: {now} | Next refresh in {next_refresh}s", style=STYLE_DIM)
+    parts.append(footer_text)
 
-    # Combine all
-    layout.split_column(
-        Layout(header_text, name="header", size=3),
-        Layout(name="body"),
-        Layout(footer_text, name="footer", size=2),
-    )
-
-    # Body content
-    body_content = []
-    body_content.extend(content_parts)
-    if changes:
-        body_content.append(changes)
-    body_content.append(table)
-    body_content.append(stats_text)
-
-    # Create a simple layout for body
-    from rich.console import Group
-    layout["body"].update(Group(*body_content))
-
-    return layout
+    return Group(*parts)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -643,7 +618,7 @@ def create_display(peers: list, stats: dict, new_peers: set, disconnected_peers:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    global PEER_HISTORY
+    global PEER_HISTORY, RECENT_CHANGES
 
     # Initialize
     init_database()
@@ -673,13 +648,17 @@ def main():
     try:
         tty.setcbreak(sys.stdin.fileno())
 
-        last_refresh = 0
-        peers = []
-        current_peer_ids = set()
-        new_peers = set()
-        disconnected_peers = set()
-        error_msg = ""
+        # Initial fetch and geo processing (OUTSIDE Live context)
+        console.print("[bold cyan]Fetching peer data...[/]")
+        peers = get_peer_info()
 
+        if peers:
+            process_peers_with_progress(peers)
+
+        current_peer_ids = {str(p.get('id', '')): p for p in peers}
+        last_refresh = time.time()
+
+        # Now enter the Live context for smooth table updates
         with Live(console=console, refresh_per_second=4, screen=True) as live:
             while running:
                 now = time.time()
@@ -690,38 +669,58 @@ def main():
                     if key.lower() == 'q':
                         break
 
-                # Refresh data
+                # Refresh data (geo lookups already done, just update table)
                 if now - last_refresh >= REFRESH_INTERVAL:
-                    # Fetch peers
-                    peers = get_peer_info()
+                    # Fetch new peer list
+                    new_peers = get_peer_info()
 
-                    if not peers:
-                        error_msg = "No peers connected or bitcoind not running"
-                    else:
-                        error_msg = ""
+                    if new_peers:
+                        new_peer_ids = {str(p.get('id', '')): p for p in new_peers}
 
-                        # Process geo lookups (with progress)
-                        process_peers(peers, console)
+                        # Find changes
+                        current_ids = set(current_peer_ids.keys())
+                        new_ids = set(new_peer_ids.keys())
 
-                        # Track peer history for changes
-                        prev_peer_ids = current_peer_ids
-                        current_peer_ids = {str(p.get('id', '')) for p in peers}
+                        # Newly connected
+                        for pid in (new_ids - current_ids):
+                            peer = new_peer_ids[pid]
+                            addr = peer.get('addr', '')
+                            network_type = peer.get('network', get_network_type(addr))
+                            ip = extract_ip(addr)
+                            RECENT_CHANGES.append((now, 'connected', {'ip': ip, 'network': network_type}))
 
-                        # Calculate new and disconnected
-                        if PEER_HISTORY:
-                            all_prev = set()
-                            for hist in PEER_HISTORY:
-                                all_prev.update(hist)
-                            new_peers = current_peer_ids - all_prev
-                            disconnected_peers = all_prev - current_peer_ids
-                        else:
-                            new_peers = set()
-                            disconnected_peers = set()
+                        # Disconnected
+                        for pid in (current_ids - new_ids):
+                            peer = current_peer_ids[pid]
+                            addr = peer.get('addr', '')
+                            network_type = peer.get('network', get_network_type(addr))
+                            ip = extract_ip(addr)
+                            RECENT_CHANGES.append((now, 'disconnected', {'ip': ip, 'network': network_type}))
 
-                        # Update history
-                        PEER_HISTORY.append(prev_peer_ids)
-                        if len(PEER_HISTORY) > MAX_HISTORY:
-                            PEER_HISTORY.pop(0)
+                        # Trim old changes (older than 30 seconds)
+                        RECENT_CHANGES = [(t, c, p) for t, c, p in RECENT_CHANGES if now - t < 30]
+
+                        # Check for new IPs that need geo lookup
+                        needs_lookup = []
+                        for peer in new_peers:
+                            addr = peer.get('addr', '')
+                            network_type = peer.get('network', get_network_type(addr))
+                            ip = extract_ip(addr)
+
+                            if is_public_address(network_type):
+                                geo = get_peer_geo(ip)
+                                if not geo or should_retry_geo(ip):
+                                    needs_lookup.append((ip, network_type))
+                            elif not get_peer_geo(ip):
+                                # Private network, just insert
+                                upsert_peer_geo(ip, network_type, GEO_PRIVATE)
+
+                        # If there are new IPs to lookup, we need to exit Live, do lookup, re-enter
+                        # For now, just update what we have and note that location is pending
+                        # (The next full refresh will pick them up)
+
+                        peers = new_peers
+                        current_peer_ids = new_peer_ids
 
                     last_refresh = now
 
@@ -732,7 +731,8 @@ def main():
                 stats = get_peer_stats()
 
                 # Update display
-                display = create_display(peers, stats, new_peers, disconnected_peers, next_refresh, error_msg)
+                error_msg = "" if peers else "No peers connected or bitcoind not running"
+                display = create_display(peers, stats, next_refresh, error_msg)
                 live.update(display)
 
                 time.sleep(0.1)

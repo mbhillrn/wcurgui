@@ -537,7 +537,7 @@ manual_enter_datadir() {
 
 display_detection_results() {
     echo ""
-    print_header "Detection Results"
+    echo -e "${T_SECONDARY}${BOLD}These are the settings I found:${RST}"
     echo ""
 
     print_kv "Bitcoin CLI" "${MBTC_CLI_PATH:-not found}" 18
@@ -566,6 +566,40 @@ display_detection_results() {
     echo -e "${T_DIM}Full CLI command:${RST}"
     echo -e "  ${BWHITE}$(get_cli_command)${RST}"
     echo ""
+}
+
+confirm_detection_results() {
+    echo ""
+    echo -e "${T_WARN}?${RST} Does this look correct?"
+    echo ""
+    echo -e "  ${T_INFO}y)${RST} Yes, save these settings"
+    echo -e "  ${T_INFO}n)${RST} No, enter settings manually"
+    echo -e "  ${T_ERROR}q)${RST} Quit"
+    echo ""
+
+    echo -en "${T_DIM}Choice [y/n/q]:${RST} "
+    read -r confirm_choice
+
+    case "$confirm_choice" in
+        y|Y|yes|Yes|"")
+            save_config
+            msg_ok "Configuration saved!"
+            return 0
+            ;;
+        n|N|no|No)
+            msg_info "You can manually configure settings from the main menu."
+            return 1
+            ;;
+        q|Q)
+            msg_info "Goodbye!"
+            exit 0
+            ;;
+        *)
+            save_config
+            msg_ok "Configuration saved!"
+            return 0
+            ;;
+    esac
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -664,8 +698,8 @@ run_detection() {
         start_spinner "Scanning for bitcoind process"
         if detect_running_process; then
             stop_spinner 0 "Found running bitcoind (PID: $(pgrep bitcoind | head -1))"
-            [[ -n "$MBTC_DATADIR" ]] && msg_ok "Extracted datadir: $MBTC_DATADIR"
-            [[ -n "$MBTC_CONF" ]] && msg_ok "Extracted conf: $MBTC_CONF"
+            [[ -n "$MBTC_DATADIR" ]] && msg_ok "Detected datadir: $MBTC_DATADIR"
+            [[ -n "$MBTC_CONF" ]] && msg_ok "Detected conf: $MBTC_CONF"
         else
             stop_spinner 0 "bitcoind not running"
 
@@ -823,10 +857,10 @@ run_detection() {
     print_section_end
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Save and display results
+    # Display results and ask for confirmation
     # ─────────────────────────────────────────────────────────────────────────
-    save_config
     display_detection_results
+    confirm_detection_results
 
     return 0
 }

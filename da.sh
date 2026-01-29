@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="0.2.0"
+VERSION="0.2.1"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CTRL+C HANDLING
@@ -84,6 +84,15 @@ show_status() {
         print_kv "Network" "${MBTC_NETWORK:-main}" 16
         print_kv "RPC" "${MBTC_RPC_HOST:-127.0.0.1}:${MBTC_RPC_PORT:-8332}" 16
 
+        # Show auth method
+        if [[ -n "$MBTC_COOKIE_PATH" && -f "$MBTC_COOKIE_PATH" ]]; then
+            print_kv "Auth" "Cookie" 16
+        elif [[ -n "$MBTC_RPC_USER" ]]; then
+            print_kv "Auth" "RPC User ($MBTC_RPC_USER)" 16
+        else
+            print_kv "Auth" "Default" 16
+        fi
+
         # Quick RPC test
         if test_rpc 2>/dev/null; then
             echo ""
@@ -137,6 +146,114 @@ run_detection() {
     load_config
 }
 
+run_manual_config() {
+    clear
+    show_banner
+    print_header "Manual Configuration"
+
+    echo ""
+    echo -e "${T_SECONDARY}Enter the paths to your Bitcoin Core configuration.${RST}"
+    echo -e "${T_DIM}(After entering these, the rest will be auto-detected)${RST}"
+    echo ""
+
+    # Ask for bitcoin.conf path
+    local conf_path=""
+    while true; do
+        echo -en "${T_INFO}Path to bitcoin.conf${RST} ${T_DIM}(or 'b' to go back):${RST} "
+        read -r conf_path
+
+        if [[ "$conf_path" == "b" || "$conf_path" == "B" ]]; then
+            return
+        fi
+
+        conf_path="${conf_path/#\~/$HOME}"
+
+        if [[ -f "$conf_path" ]]; then
+            msg_ok "Found: $conf_path"
+            break
+        else
+            msg_err "File not found: $conf_path"
+        fi
+    done
+
+    # Ask for datadir (optional if we can find it)
+    local datadir=""
+    local conf_dir
+    conf_dir=$(dirname "$conf_path")
+
+    if [[ -d "$conf_dir/blocks" ]] || [[ -f "$conf_dir/.cookie" ]]; then
+        echo ""
+        echo -e "${T_INFO}Detected datadir:${RST} $conf_dir"
+        if prompt_yn "Use this as data directory?"; then
+            datadir="$conf_dir"
+        fi
+    fi
+
+    if [[ -z "$datadir" ]]; then
+        echo ""
+        while true; do
+            echo -en "${T_INFO}Path to data directory${RST} ${T_DIM}(or 'b' to go back):${RST} "
+            read -r datadir
+
+            if [[ "$datadir" == "b" || "$datadir" == "B" ]]; then
+                return
+            fi
+
+            datadir="${datadir/#\~/$HOME}"
+
+            if [[ -d "$datadir" ]]; then
+                msg_ok "Found: $datadir"
+                break
+            else
+                msg_err "Directory not found: $datadir"
+            fi
+        done
+    fi
+
+    # Set the manual values
+    MBTC_CONF="$conf_path"
+    MBTC_DATADIR="$datadir"
+
+    # Now run detection to fill in the rest (CLI, network, auth, etc.)
+    echo ""
+    msg_info "Auto-detecting remaining settings..."
+
+    # Source detection script functions
+    source "$MBTC_DIR/scripts/detect.sh"
+
+    # Detect CLI
+    if detect_bitcoin_cli; then
+        msg_ok "Found bitcoin-cli: $MBTC_CLI_PATH"
+    fi
+
+    # Parse config file for network settings
+    if [[ -f "$MBTC_CONF" ]]; then
+        parse_conf_file "$MBTC_CONF"
+    fi
+
+    # Find cookie
+    find_cookie
+    if [[ -n "$MBTC_COOKIE_PATH" && -f "$MBTC_COOKIE_PATH" ]]; then
+        msg_ok "Found cookie auth: $MBTC_COOKIE_PATH"
+    fi
+
+    # Test RPC
+    echo ""
+    if test_rpc; then
+        msg_ok "RPC connection successful!"
+    else
+        msg_warn "RPC connection failed - bitcoind may not be running"
+    fi
+
+    # Save config
+    save_config
+    msg_ok "Configuration saved!"
+
+    echo ""
+    echo -en "${T_DIM}Press Enter to continue...${RST}"
+    read -r
+}
+
 reset_config() {
     echo ""
     if prompt_yn "Are you sure you want to clear saved configuration?"; then
@@ -170,20 +287,18 @@ main() {
     if [[ "$MBTC_CONFIGURED" -ne 1 ]]; then
         echo ""
         msg_info "No configuration found. Running Bitcoin Core detection..."
-        echo ""
-        echo -en "${T_DIM}Press Enter to continue...${RST}"
-        read -r
+        sleep 1
         run_detection
     else
         # Config exists - ask if it's correct on first run
         show_status
 
         echo ""
-        echo -e "${T_WARN}?${RST} Is this configuration correct?"
+        echo -e "${T_WARN}?${RST} These are the detected settings. Are they correct?"
         echo ""
         echo -e "  ${T_INFO}1)${RST} Yes, continue to main menu"
         echo -e "  ${T_INFO}2)${RST} No, run detection again"
-        echo -e "  ${T_INFO}3)${RST} No, reset and reconfigure"
+        echo -e "  ${T_INFO}3)${RST} No, enter settings manually"
         echo -e "  ${T_ERROR}q)${RST} Quit"
         echo ""
 
@@ -198,8 +313,7 @@ main() {
                 run_detection
                 ;;
             3)
-                clear_config
-                run_detection
+                run_manual_config
                 ;;
             q|Q)
                 msg_info "Goodbye!"
