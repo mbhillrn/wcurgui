@@ -1,35 +1,30 @@
 #!/usr/bin/env python3
 """
-MBTC-DASH - Peer List Display
-Shows connected peers with geo-location data using Rich for smooth live updates
+MBTC-DASH - Web Server
+Local web dashboard for Bitcoin Core peer monitoring
 """
 
 import json
 import os
-import signal
+import queue
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from flask import Flask, jsonify, render_template, Response
+
 import requests
-from rich.console import Console, Group
-from rich.live import Live
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskProgressColumn
-from rich.table import Table
-from rich.text import Text
-from rich.layout import Layout
-from rich.style import Style
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-REFRESH_INTERVAL = 10  # Seconds between refreshes
+REFRESH_INTERVAL = 10  # Seconds between peer refreshes
 GEO_API_DELAY = 1.5    # Seconds between API calls (stay under 45/min limit)
 GEO_API_URL = "http://ip-api.com/json"
 GEO_API_FIELDS = "status,country,countryCode,region,regionName,city,district,lat,lon,isp,as,hosting,query"
@@ -38,10 +33,10 @@ GEO_API_FIELDS = "status,country,countryCode,region,regionName,city,district,lat
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / 'data'
-CONFIG_DIR = DATA_DIR
-CONFIG_FILE = CONFIG_DIR / 'config.conf'
-CONFIG_FILE_OLD = CONFIG_DIR / 'detection_cache.conf'  # Backwards compat
+CONFIG_FILE = DATA_DIR / 'config.conf'
 DB_FILE = DATA_DIR / 'peers.db'
+TEMPLATES_DIR = SCRIPT_DIR / 'templates'
+STATIC_DIR = SCRIPT_DIR / 'static'
 
 # Geo status codes
 GEO_OK = 0
@@ -51,29 +46,17 @@ GEO_UNAVAILABLE = 2
 # Retry intervals for GEO_UNAVAILABLE (in seconds): 1d, 3d, 7d, 7d...
 RETRY_INTERVALS = [86400, 259200, 604800, 604800]
 
-# Track peer history for recently connected/disconnected
-PEER_HISTORY = []  # Last 3 snapshots of peer IDs
-MAX_HISTORY = 3
+# Flask app
+app = Flask(__name__,
+            template_folder=str(TEMPLATES_DIR),
+            static_folder=str(STATIC_DIR))
 
-# Recent changes log (for the bottom panel)
-RECENT_CHANGES = []  # List of (timestamp, change_type, peer_info)
-MAX_RECENT_CHANGES = 10
+# Event queue for SSE updates
+update_queue = queue.Queue()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# STYLES
-# ═══════════════════════════════════════════════════════════════════════════════
-
-STYLE_HEADER = Style(color="dodger_blue1", bold=True)
-STYLE_BORDER = Style(color="steel_blue")
-STYLE_DIM = Style(color="grey70")
-STYLE_SUCCESS = Style(color="green")
-STYLE_WARN = Style(color="yellow")
-STYLE_ERROR = Style(color="red")
-STYLE_NEW = Style(color="green", bold=True)
-STYLE_DISCONNECTED = Style(color="red", bold=True)
-
-console = Console()
-
+# Current peer data (shared between threads)
+current_peers = []
+current_peers_lock = threading.Lock()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIG LOADING
@@ -94,17 +77,11 @@ class Config:
 
     def load(self) -> bool:
         """Load config from cache file"""
-        # Check new location first, then old for backwards compat
-        config_file = None
-        if CONFIG_FILE.exists():
-            config_file = CONFIG_FILE
-        elif CONFIG_FILE_OLD.exists():
-            config_file = CONFIG_FILE_OLD
-        else:
+        if not CONFIG_FILE.exists():
             return False
 
         try:
-            with open(config_file, 'r') as f:
+            with open(CONFIG_FILE, 'r') as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith('#') or '=' not in line:
@@ -367,6 +344,23 @@ def format_bytes(bytes_val: int) -> str:
         return f"{bytes_val}B"
 
 
+def format_conntime(conntime: int) -> str:
+    """Format connection time to human readable"""
+    if not conntime:
+        return "-"
+    elapsed = int(time.time()) - conntime
+    if elapsed < 3600:
+        return f"{elapsed // 60}m"
+    elif elapsed < 86400:
+        hours = elapsed // 3600
+        mins = (elapsed % 3600) // 60
+        return f"{hours}h {mins}m"
+    else:
+        days = elapsed // 86400
+        hours = (elapsed % 86400) // 3600
+        return f"{days}d {hours}h"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # BITCOIN RPC
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -384,235 +378,186 @@ def get_peer_info() -> list:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PEER PROCESSING (DONE OUTSIDE LIVE CONTEXT)
+# BACKGROUND GEO LOOKUP
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def process_peers_with_progress(peers: list) -> list:
-    """Process all peers, fetch missing geo data with progress bar (OUTSIDE Live context)"""
-    # Find peers that need geo lookup
-    new_lookups = []
-    all_ips = []
+def geo_lookup_worker():
+    """Background worker that processes geo lookups one at a time"""
+    while True:
+        time.sleep(1)  # Check every second
 
-    for peer in peers:
-        addr = peer.get('addr', '')
-        network_type = peer.get('network', get_network_type(addr))
-        ip = extract_ip(addr)
+        with current_peers_lock:
+            peers_snapshot = list(current_peers)
 
-        all_ips.append((ip, network_type))
+        for peer in peers_snapshot:
+            addr = peer.get('addr', '')
+            network_type = peer.get('network', get_network_type(addr))
+            ip = extract_ip(addr)
 
-        if is_public_address(network_type):
-            geo = get_peer_geo(ip)
-            if not geo or should_retry_geo(ip):
-                new_lookups.append((ip, network_type))
+            if is_public_address(network_type):
+                if should_retry_geo(ip):
+                    # Do the geo lookup
+                    data = fetch_geo_api(ip)
 
-    # Process new lookups with progress bar (NOT inside Live context)
-    if new_lookups:
-        total = len(new_lookups)
-        console.print(f"\n[bold cyan]{len(peers)} Bitcoin Peers found.[/] Currently stalking each one's location...")
+                    if data:
+                        upsert_peer_geo(
+                            ip, network_type, GEO_OK,
+                            data.get('country', ''),
+                            data.get('countryCode', ''),
+                            data.get('region', ''),
+                            data.get('regionName', ''),
+                            data.get('city', ''),
+                            data.get('district', ''),
+                            data.get('lat', 0),
+                            data.get('lon', 0),
+                            data.get('isp', ''),
+                            data.get('as', ''),
+                            1 if data.get('hosting') else 0
+                        )
+                    else:
+                        upsert_peer_geo(ip, network_type, GEO_UNAVAILABLE)
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TextColumn("({task.completed}/{task.total})"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Locating peers...", total=total)
+                    # Notify clients of update
+                    try:
+                        update_queue.put_nowait({'type': 'geo_update', 'ip': ip})
+                    except queue.Full:
+                        pass
 
-            for i, (ip, network_type) in enumerate(new_lookups):
-                # Fetch from API
-                data = fetch_geo_api(ip)
-
-                if data:
-                    upsert_peer_geo(
-                        ip, network_type, GEO_OK,
-                        data.get('country', ''),
-                        data.get('countryCode', ''),
-                        data.get('region', ''),
-                        data.get('regionName', ''),
-                        data.get('city', ''),
-                        data.get('district', ''),
-                        data.get('lat', 0),
-                        data.get('lon', 0),
-                        data.get('isp', ''),
-                        data.get('as', ''),
-                        1 if data.get('hosting') else 0
-                    )
-                else:
-                    upsert_peer_geo(ip, network_type, GEO_UNAVAILABLE)
-
-                progress.update(task, advance=1)
-
-                if i < total - 1:
+                    # Rate limit
                     time.sleep(GEO_API_DELAY)
+            elif not get_peer_geo(ip):
+                # Private network, insert with PRIVATE status
+                upsert_peer_geo(ip, network_type, GEO_PRIVATE)
 
-        console.print("[green]✓[/] Location lookup complete!\n")
 
-    # Update last_seen for all current peers (no API calls needed)
-    for ip, network_type in all_ips:
-        geo = get_peer_geo(ip)
-        if geo:
-            update_peer_seen(ip)
-        elif not is_public_address(network_type):
-            upsert_peer_geo(ip, network_type, GEO_PRIVATE)
+def peer_refresh_worker():
+    """Background worker that periodically refreshes peer list"""
+    while True:
+        peers = get_peer_info()
 
-    return all_ips
+        with current_peers_lock:
+            global current_peers
+            current_peers = peers
+
+        # Update last_seen for all current peers
+        for peer in peers:
+            addr = peer.get('addr', '')
+            ip = extract_ip(addr)
+            if get_peer_geo(ip):
+                update_peer_seen(ip)
+
+        # Notify clients
+        try:
+            update_queue.put_nowait({'type': 'peers_update'})
+        except queue.Full:
+            pass
+
+        time.sleep(REFRESH_INTERVAL)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DISPLAY
+# API ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def truncate(text: str, max_len: int) -> str:
-    """Truncate string to max length"""
-    if len(text) > max_len:
-        return text[:max_len-3] + "..."
-    return text
+@app.route('/')
+def index():
+    """Serve main dashboard page"""
+    return render_template('index.html')
 
 
-def format_location(ip: str, network_type: str) -> str:
-    """Format location string"""
-    if network_type in ('onion', 'i2p', 'cjdns'):
-        return "[PRIVATE LOCATION]"
+@app.route('/api/peers')
+def api_peers():
+    """Get current peer list with geo data"""
+    with current_peers_lock:
+        peers_snapshot = list(current_peers)
 
-    geo = get_peer_geo(ip)
-    if not geo:
-        return "[LOCATION UNAVAILABLE]"
-
-    if geo['geo_status'] == GEO_PRIVATE:
-        return "[PRIVATE LOCATION]"
-    elif geo['geo_status'] == GEO_UNAVAILABLE or not geo.get('city'):
-        return "[LOCATION UNAVAILABLE]"
-    else:
-        return f"{geo['city']}, {geo['country_code']}"
-
-
-def create_peer_table(peers: list) -> Table:
-    """Create the peer table with Rich"""
-    table = Table(
-        show_header=True,
-        header_style=STYLE_HEADER,
-        border_style=STYLE_BORDER,
-        expand=True,
-        box=None,
-    )
-
-    table.add_column("ID", style="white", width=6)
-    table.add_column("Address", style="white", width=24)
-    table.add_column("Location", style="white", width=22)
-    table.add_column("ISP", style="white", width=18)
-    table.add_column("In/Out", style="white", width=6)
-    table.add_column("Ping", style="white", width=7)
-    table.add_column("Sent/Recv", style="white", width=16)
-    table.add_column("Version", style="white", width=20)
-
-    for peer in peers:
-        peer_id = str(peer.get('id', ''))
+    result = []
+    for peer in peers_snapshot:
         addr = peer.get('addr', '')
         network_type = peer.get('network', get_network_type(addr))
         ip = extract_ip(addr)
 
-        # Location
-        location = truncate(format_location(ip, network_type), 22)
-
-        # ISP from database
         geo = get_peer_geo(ip)
-        isp = truncate(geo.get('isp', '-') if geo else '-', 18)
 
-        # Direction
-        direction = "IN" if peer.get('inbound') else "OUT"
+        # Format location
+        if network_type in ('onion', 'i2p', 'cjdns'):
+            location = "PRIVATE LOCATION"
+            country_code = "PRIV"
+        elif geo and geo['geo_status'] == GEO_OK and geo.get('city'):
+            location = f"{geo['city']}, {geo['country_code']}"
+            country_code = geo['country_code']
+        elif geo and geo['geo_status'] == GEO_PRIVATE:
+            location = "PRIVATE LOCATION"
+            country_code = "PRIV"
+        else:
+            location = "LOCATION UNAVAILABLE"
+            country_code = "N/A"
 
-        # Ping
+        # Format ping
         ping = peer.get('pingtime') or peer.get('pingwait') or 0
-        ping_str = f"{int(ping * 1000)}ms" if ping else "-"
+        ping_ms = int(ping * 1000) if ping else None
 
-        # Bytes
-        sent = format_bytes(peer.get('bytessent', 0))
-        recv = format_bytes(peer.get('bytesrecv', 0))
+        result.append({
+            'id': peer.get('id', ''),
+            'addr': addr,
+            'ip': ip,
+            'network': network_type,
+            'location': location,
+            'country_code': country_code,
+            'country': geo.get('country', '') if geo else '',
+            'region': geo.get('region_name', '') if geo else '',
+            'city': geo.get('city', '') if geo else '',
+            'lat': geo.get('lat', 0) if geo else 0,
+            'lon': geo.get('lon', 0) if geo else 0,
+            'isp': geo.get('isp', '') if geo else '',
+            'as_info': geo.get('as_info', '') if geo else '',
+            'inbound': peer.get('inbound', False),
+            'direction': 'IN' if peer.get('inbound') else 'OUT',
+            'ping_ms': ping_ms,
+            'bytessent': peer.get('bytessent', 0),
+            'bytesrecv': peer.get('bytesrecv', 0),
+            'bytessent_fmt': format_bytes(peer.get('bytessent', 0)),
+            'bytesrecv_fmt': format_bytes(peer.get('bytesrecv', 0)),
+            'subver': peer.get('subver', '').replace('/', ''),
+            'version': peer.get('version', ''),
+            'conntime': peer.get('conntime', 0),
+            'conntime_fmt': format_conntime(peer.get('conntime', 0)),
+            'services': peer.get('servicesnames', []),
+            'connection_type': peer.get('connection_type', ''),
+            'lastsend': peer.get('lastsend', 0),
+            'lastrecv': peer.get('lastrecv', 0),
+        })
 
-        # Version
-        version = truncate(peer.get('subver', '').replace('/', ''), 20)
-
-        table.add_row(
-            peer_id,
-            truncate(ip, 24),
-            location,
-            isp,
-            direction,
-            ping_str,
-            f"{sent} / {recv}",
-            version,
-        )
-
-    return table
-
-
-def create_changes_panel() -> Panel:
-    """Create panel showing recent connections/disconnections"""
-    if not RECENT_CHANGES:
-        content = Text("No recent changes", style=STYLE_DIM)
-    else:
-        lines = []
-        for timestamp, change_type, peer_info in RECENT_CHANGES[-MAX_RECENT_CHANGES:]:
-            ip = peer_info.get('ip', 'unknown')
-            network = peer_info.get('network', 'unknown')
-            time_str = datetime.fromtimestamp(timestamp).strftime('%H:%M:%S')
-
-            if change_type == 'connected':
-                lines.append(Text(f"+{ip} {network} connected ({time_str})", style=STYLE_NEW))
-            else:
-                lines.append(Text(f"-{ip} {network} disconnected ({time_str})", style=STYLE_DISCONNECTED))
-
-        content = Text("\n").join(lines)
-
-    return Panel(
-        content,
-        title="Recent Changes (last 30s)",
-        border_style=STYLE_BORDER,
-        padding=(0, 1),
-        height=min(len(RECENT_CHANGES) + 3, 8) if RECENT_CHANGES else 4
-    )
+    return jsonify(result)
 
 
-def create_display(peers: list, stats: dict, next_refresh: int, error: str = "") -> Group:
-    """Create the full display layout"""
-    parts = []
+@app.route('/api/stats')
+def api_stats():
+    """Get database statistics"""
+    stats = get_peer_stats()
+    with current_peers_lock:
+        stats['connected'] = len(current_peers)
+    stats['last_update'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return jsonify(stats)
 
-    # Header
-    header_text = Text()
-    header_text.append("═" * 110 + "\n", style=STYLE_HEADER)
-    header_text.append("  MBTC-DASH Peer List", style=STYLE_HEADER)
-    header_text.append(" " * 50, style=STYLE_DIM)
-    header_text.append(f"Press 'q' to quit | Refresh: {REFRESH_INTERVAL}s\n", style=STYLE_DIM)
-    header_text.append("═" * 110, style=STYLE_HEADER)
-    parts.append(header_text)
 
-    # Error or peer count
-    if error:
-        parts.append(Text(f"\n⚠ {error}\n", style=STYLE_WARN))
-    else:
-        parts.append(Text(f"\nConnected peers: {len(peers)}\n", style="bold cyan"))
+@app.route('/api/events')
+def api_events():
+    """Server-Sent Events endpoint for real-time updates"""
+    def generate():
+        # Send initial connection event
+        yield f"data: {json.dumps({'type': 'connected'})}\n\n"
 
-    # Peer table
-    if peers:
-        parts.append(create_peer_table(peers))
-    else:
-        parts.append(Text("No peers connected", style=STYLE_DIM))
+        while True:
+            try:
+                # Wait for update with timeout
+                event = update_queue.get(timeout=30)
+                yield f"data: {json.dumps(event)}\n\n"
+            except queue.Empty:
+                # Send keepalive
+                yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
 
-    # Stats
-    stats_text = Text(f"\nDatabase stats: {stats['geo_ok']} geolocated | {stats['private']} private | {stats['unavailable']} unavailable | Networks: {stats['ipv4']} IPv4, {stats['ipv6']} IPv6, {stats['onion']} Tor, {stats['i2p']} I2P, {stats['cjdns']} CJDNS\n", style=STYLE_DIM)
-    parts.append(stats_text)
-
-    # Recent changes panel (bottom)
-    parts.append(create_changes_panel())
-
-    # Footer
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    footer_text = Text(f"\nLast update: {now} | Next refresh in {next_refresh}s", style=STYLE_DIM)
-    parts.append(footer_text)
-
-    return Group(*parts)
+    return Response(generate(), mimetype='text/event-stream')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -620,128 +565,34 @@ def create_display(peers: list, stats: dict, next_refresh: int, error: str = "")
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    global PEER_HISTORY, RECENT_CHANGES
-
     # Initialize
     init_database()
 
     # Load config
     if not config.load():
-        console.print("[red]Error:[/] Configuration not found. Run ./da.sh first to configure.")
+        print("Error: Configuration not found. Run ./da.sh first to configure.")
         sys.exit(1)
 
-    # Signal handler for graceful exit
-    running = True
+    # Do initial peer fetch
+    global current_peers
+    current_peers = get_peer_info()
+    print(f"Initial fetch: {len(current_peers)} peers found")
 
-    def signal_handler(sig, frame):
-        nonlocal running
-        running = False
+    # Start background workers
+    geo_thread = threading.Thread(target=geo_lookup_worker, daemon=True)
+    geo_thread.start()
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    refresh_thread = threading.Thread(target=peer_refresh_worker, daemon=True)
+    refresh_thread.start()
 
-    # Keyboard input (non-blocking)
-    import select
-    import termios
-    import tty
+    # Start Flask server
+    print("\n" + "="*60)
+    print("  MBTC-DASH Web Server")
+    print("="*60)
+    print(f"\n  Open in browser: http://127.0.0.1:5000")
+    print(f"  Press Ctrl+C to stop\n")
 
-    old_settings = termios.tcgetattr(sys.stdin)
-
-    try:
-        tty.setcbreak(sys.stdin.fileno())
-
-        # Initial fetch and geo processing (OUTSIDE Live context)
-        console.print("[bold cyan]Fetching peer data...[/]")
-        peers = get_peer_info()
-
-        if peers:
-            process_peers_with_progress(peers)
-
-        current_peer_ids = {str(p.get('id', '')): p for p in peers}
-        last_refresh = time.time()
-
-        # Now enter the Live context for smooth table updates
-        with Live(console=console, refresh_per_second=4, screen=True) as live:
-            while running:
-                now = time.time()
-
-                # Check for quit key
-                if select.select([sys.stdin], [], [], 0)[0]:
-                    key = sys.stdin.read(1)
-                    if key.lower() == 'q':
-                        break
-
-                # Refresh data (geo lookups already done, just update table)
-                if now - last_refresh >= REFRESH_INTERVAL:
-                    # Fetch new peer list
-                    new_peers = get_peer_info()
-
-                    if new_peers:
-                        new_peer_ids = {str(p.get('id', '')): p for p in new_peers}
-
-                        # Find changes
-                        current_ids = set(current_peer_ids.keys())
-                        new_ids = set(new_peer_ids.keys())
-
-                        # Newly connected
-                        for pid in (new_ids - current_ids):
-                            peer = new_peer_ids[pid]
-                            addr = peer.get('addr', '')
-                            network_type = peer.get('network', get_network_type(addr))
-                            ip = extract_ip(addr)
-                            RECENT_CHANGES.append((now, 'connected', {'ip': ip, 'network': network_type}))
-
-                        # Disconnected
-                        for pid in (current_ids - new_ids):
-                            peer = current_peer_ids[pid]
-                            addr = peer.get('addr', '')
-                            network_type = peer.get('network', get_network_type(addr))
-                            ip = extract_ip(addr)
-                            RECENT_CHANGES.append((now, 'disconnected', {'ip': ip, 'network': network_type}))
-
-                        # Trim old changes (older than 30 seconds)
-                        RECENT_CHANGES = [(t, c, p) for t, c, p in RECENT_CHANGES if now - t < 30]
-
-                        # Check for new IPs that need geo lookup
-                        needs_lookup = []
-                        for peer in new_peers:
-                            addr = peer.get('addr', '')
-                            network_type = peer.get('network', get_network_type(addr))
-                            ip = extract_ip(addr)
-
-                            if is_public_address(network_type):
-                                geo = get_peer_geo(ip)
-                                if not geo or should_retry_geo(ip):
-                                    needs_lookup.append((ip, network_type))
-                            elif not get_peer_geo(ip):
-                                # Private network, just insert
-                                upsert_peer_geo(ip, network_type, GEO_PRIVATE)
-
-                        # If there are new IPs to lookup, we need to exit Live, do lookup, re-enter
-                        # For now, just update what we have and note that location is pending
-                        # (The next full refresh will pick them up)
-
-                        peers = new_peers
-                        current_peer_ids = new_peer_ids
-
-                    last_refresh = now
-
-                # Calculate time until next refresh
-                next_refresh = max(0, int(REFRESH_INTERVAL - (now - last_refresh)))
-
-                # Get stats
-                stats = get_peer_stats()
-
-                # Update display
-                error_msg = "" if peers else "No peers connected or bitcoind not running"
-                display = create_display(peers, stats, next_refresh, error_msg)
-                live.update(display)
-
-                time.sleep(0.1)
-
-    finally:
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-        console.print("\n[green]✓[/] Peer list closed")
+    app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="0.2.1"
+VERSION="0.3.0"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CTRL+C HANDLING
@@ -116,9 +116,10 @@ show_menu() {
     echo ""
     echo -e "${T_SECONDARY}${BOLD}Main Menu${RST}"
     echo ""
-    echo -e "  ${T_INFO}1)${RST} Peer List          ${T_DIM}- View connected peers with geo-location${RST}"
-    echo -e "  ${T_INFO}2)${RST} Blockchain Info    ${T_DIM}- View chain status (coming soon)${RST}"
-    echo -e "  ${T_INFO}3)${RST} Mempool Stats      ${T_DIM}- View mempool data (coming soon)${RST}"
+    echo -e "  ${T_INFO}1)${RST} Peer List          ${T_DIM}- View connected peers with geo-location (terminal)${RST}"
+    echo -e "  ${T_INFO}2)${RST} Web Dashboard      ${T_DIM}- Launch local web dashboard${RST}"
+    echo -e "  ${T_INFO}3)${RST} Blockchain Info    ${T_DIM}- View chain status (coming soon)${RST}"
+    echo -e "  ${T_INFO}4)${RST} Mempool Stats      ${T_DIM}- View mempool data (coming soon)${RST}"
     echo ""
     echo -e "  ${T_WARN}d)${RST} Run Detection      ${T_DIM}- Detect/configure Bitcoin Core${RST}"
     echo -e "  ${T_WARN}r)${RST} Reset Config       ${T_DIM}- Clear saved configuration${RST}"
@@ -138,6 +139,35 @@ run_peer_list() {
 
     # Run Python peer list
     python3 "$MBTC_DIR/scripts/peerlist.py"
+}
+
+run_web_dashboard() {
+    if [[ "$MBTC_CONFIGURED" -ne 1 ]]; then
+        msg_err "Bitcoin Core not configured. Run detection first."
+        echo ""
+        echo -en "${T_DIM}Press Enter to continue...${RST}"
+        read -r
+        return
+    fi
+
+    # Check if Flask is installed
+    if ! python3 -c "import flask" 2>/dev/null; then
+        msg_err "Flask is required for the web dashboard."
+        echo ""
+        echo -e "${T_INFO}Install with:${RST} pip3 install flask requests"
+        echo ""
+        echo -en "${T_DIM}Press Enter to continue...${RST}"
+        read -r
+        return
+    fi
+
+    # Run web server
+    clear
+    msg_info "Starting web dashboard..."
+    msg_info "Open http://127.0.0.1:5000 in your browser"
+    msg_warn "Press Ctrl+C to stop"
+    echo ""
+    python3 "$MBTC_DIR/web/server.py"
 }
 
 run_detection() {
@@ -339,12 +369,15 @@ main() {
                 run_peer_list
                 ;;
             2)
+                run_web_dashboard
+                ;;
+            3)
                 msg_info "Blockchain info coming soon..."
                 echo ""
                 echo -en "${T_DIM}Press Enter to continue...${RST}"
                 read -r
                 ;;
-            3)
+            4)
                 msg_info "Mempool stats coming soon..."
                 echo ""
                 echo -en "${T_DIM}Press Enter to continue...${RST}"

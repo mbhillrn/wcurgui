@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBTC-DASH - Bitcoin Peer Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-title">
+                <pre class="logo">
+███╗   ███╗██████╗ ████████╗ ██████╗         ██████╗  █████╗ ███████╗██╗  ██╗
+████╗ ████║██╔══██╗╚══██╔══╝██╔════╝         ██╔══██╗██╔══██╗██╔════╝██║  ██║
+██╔████╔██║██████╔╝   ██║   ██║              ██║  ██║███████║███████╗███████║
+██║╚██╔╝██║██╔══██╗   ██║   ██║              ██║  ██║██╔══██║╚════██║██╔══██║
+██║ ╚═╝ ██║██████╔╝   ██║   ╚██████╗         ██████╔╝██║  ██║███████║██║  ██║
+╚═╝     ╚═╝╚═════╝    ╚═╝    ╚═════╝         ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+                </pre>
+                <span class="subtitle">Bitcoin Peer Dashboard</span>
+            </div>
+            <div class="header-info">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="connection-status">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat">
+                <span class="stat-label">Connected</span>
+                <span class="stat-value" id="stat-connected">-</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Geolocated</span>
+                <span class="stat-value" id="stat-geolocated">-</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Private</span>
+                <span class="stat-value" id="stat-private">-</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">IPv4</span>
+                <span class="stat-value" id="stat-ipv4">-</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">IPv6</span>
+                <span class="stat-value" id="stat-ipv6">-</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Tor</span>
+                <span class="stat-value" id="stat-onion">-</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">I2P</span>
+                <span class="stat-value" id="stat-i2p">-</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Last Update</span>
+                <span class="stat-value" id="stat-lastupdate">-</span>
+            </div>
+        </div>
+
+        <!-- Main Content - Two Panel Layout -->
+        <div class="main-content">
+            <!-- Left Panel: Peer Table -->
+            <div class="panel peer-panel">
+                <div class="panel-header">
+                    <h2>Connected Peers</h2>
+                    <span class="peer-count" id="peer-count">0 peers</span>
+                </div>
+                <div class="table-container">
+                    <table class="peer-table" id="peer-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="id">ID</th>
+                                <th data-sort="ip">Address</th>
+                                <th data-sort="location">Location</th>
+                                <th data-sort="isp">ISP</th>
+                                <th data-sort="direction">Dir</th>
+                                <th data-sort="ping_ms">Ping</th>
+                                <th data-sort="bytesrecv">Recv</th>
+                                <th data-sort="bytessent">Sent</th>
+                                <th data-sort="conntime_fmt">Conn</th>
+                                <th data-sort="subver">Version</th>
+                            </tr>
+                        </thead>
+                        <tbody id="peer-tbody">
+                            <tr class="loading-row">
+                                <td colspan="10">Loading peers...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Panel: Map (placeholder for now) -->
+            <div class="panel map-panel">
+                <div class="panel-header">
+                    <h2>Peer Map</h2>
+                </div>
+                <div class="map-container" id="map-container">
+                    <div class="map-placeholder">
+                        <p>Map coming soon</p>
+                        <p class="map-hint">Peer locations will be displayed here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <span>MBTC-DASH v0.2.1</span>
+            <span id="refresh-timer">Refreshing in 10s</span>
+        </footer>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
