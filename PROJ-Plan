@@ -1,0 +1,236 @@
+________________________________________
+MBTC Dashboard – Organized Requirements & Notes (Cleaned)
+0. Immediate Behavior Expectations (from prior AI exchange)
+What the CLAUDE said it understood:
+•	Show the peer table immediately with all peers
+•	Update locations in real time as geo lookups complete
+•	Do not wait for all geo lookups to finish
+•	New peers that connect mid-session should also trigger geo lookups
+My response:
+•	Yes, exactly.
+________________________________________
+1. Web Version vs Backend Reality
+I don’t think the web version will be a silver bullet that avoids all these issues.
+•	The backend still must do:
+o	peer detection
+o	geo lookup
+o	caching
+o	refresh logic
+•	The website, at least initially, will mostly display what the backend produces.
+•	So correctness and structure on the backend matter first.
+________________________________________
+2. Database Location Confusion (Current State)
+I cannot find the database at all.
+Directory inspection:
+~/wcurgui
+├── da.sh
+├── lib
+│   ├── colors.sh
+│   ├── config.sh
+│   ├── database.sh
+│   ├── prereqs.sh
+│   └── ui.sh
+├── scripts
+│   ├── detect.sh
+│   └── peerlist.py
+├── PREREQS.md
+├── PROJECT_PROGRESS.md
+└── README.md
+Questions / concerns:
+•	Where is the SQLite database actually being saved? it should be nice and neat tucked away in the program folder. Is it being created at all?
+•	Shouldn’t it live in a clear, consistent location like:
+o	./data/
+o	./state/
+o	./db/
+•	Right now it feels “invisible,” which makes debugging difficult. if i had to chose, lets make it live in /data/ that way we have a folder to keep other shit as necessary as this program grows..
+________________________________________
+3. Geo-Lookup Logic (Design Requirements)
+3.1 Address classification rules
+•	Onion / I2P
+o	Cannot be geolocated
+o	Should be labeled:
+	PRIVATE LOCATION
+o	Skip API entirely
+•	CJDNS
+o	Also PRIVATE LOCATION
+o	Skip API entirely
+•	RFC1918 IPv4 / private IPv6
+o	PRIVATE LOCATION
+o	Skip API
+•	Public IPv4 / IPv6
+o	Attempt geo lookup
+o	If lookup fails:
+	Label as LOCATION UNAVAILABLE
+	Still store peer info
+3.2 Future mapping plan (FYI, not immediate)
+•	PRIVATE LOCATION → Antarctica
+•	LOCATION UNAVAILABLE → North Pole
+•	Public geo → real lat/lon
+(This affects how geo_status should be stored now.)
+________________________________________
+4. Geo Cache Strategy (Explicit Rules)
+Core idea: Cache aggressively, retry intelligently.
+Cache rules (agreed logic):
+When a public IP appears:
+1.	If in DB with geo_status = GEO_OK
+o	Use cached data
+o	No API call
+2.	If in DB with geo_status = PRIVATE
+o	Use cached data
+o	No API call
+3.	If in DB with geo_status = GEO_UNAVAILABLE
+o	Retry API only if:
+o	now - geo_last_lookup > retry_interval
+o	Retry cadence:
+	1 day
+	then 3 days
+	then 7 days
+	then forever every 7 days
+4.	If not in DB
+o	Call API once
+o	Insert row
+There should eventually be:
+•	a way to reset:
+o	only unavailable entries
+o	or the entire geo cache
+________________________________________
+5. What Is Displayed (Terminal + Website Default Table)
+Default visible columns:
+•	Peer ID (peer number)
+•	IP
+•	Port
+•	Direction (IN / OUT)
+•	Protocol / Network
+•	Country
+•	State / Region
+•	City
+•	Version / subver (with node name)
+•	Ping (ms)
+•	Bytes received
+•	Bytes sent
+•	Last received time (Eastern)
+•	Last sent time (Eastern)
+Sorting:
+•	Default sort by peer ID
+o	IDs increase over time
+o	This preserves connection order visually
+________________________________________
+6. Data Source: getpeerinfo (Raw Example)
+This is what we are pulling from Bitcoin Core:
+{
+  "id": 4,
+  "addr": "98.227.252.166:8333",
+  "addrbind": "192.168.4.100:53218",
+  "addrlocal": "47.224.113.166:53218",
+  "network": "ipv4",
+  "services": "0000000000000c09",
+  "servicesnames": [
+    "NETWORK",
+    "WITNESS",
+    "NETWORK_LIMITED",
+    "P2P_V2"
+  ],
+  "relaytxes": true,
+  "lastsend": 1769708794,
+  "lastrecv": 1769708788,
+  "last_transaction": 1769708788,
+  "last_block": 1769708258,
+  "bytessent": 376254130,
+  "bytesrecv": 113433386,
+  "conntime": 1768091653,
+  "pingtime": 0.039588,
+  "minping": 0.019113,
+  "version": 70016,
+  "subver": "/Satoshi:29.0.0/",
+  "inbound": false,
+  "addr_rate_limited": 0,
+  "connection_type": "outbound-full-relay",
+  "transport_protocol_type": "v2"
+}
+________________________________________
+7. Additional Fields to Make Available for Display
+These may not all be shown by default, but should be available.
+7.1 Services (abbreviated display)
+From:
+"servicesnames": [
+  "NETWORK",
+  "WITNESS",
+  "NETWORK_LIMITED",
+  "P2P_V2"
+]
+Displayed as:
+•	N W NL P
+•	Hover tooltip (web): full names
+________________________________________
+7.2 Time Connected
+From:
+"conntime": 1768091653
+Displayed as:
+•	minutes if < 1h
+•	hours/minutes if < 1 day
+•	days/hours if longer
+________________________________________
+7.3 Relay / Throttle Status
+Potential sources:
+•	addr_rate_limited
+•	addr_relay_enabled
+Open question:
+•	Which field is the most accurate indicator?
+•	Possibly both, displayed differently:
+o	Relay allowed: yes/no
+o	Throttled: yes/no
+________________________________________
+7.4 Connection Type
+From:
+"connection_type": "outbound-full-relay"
+Should be displayed.
+________________________________________
+8. Geo API Result Example (Raw)
+{
+  "query": "24.48.0.1",
+  "status": "success",
+  "country": "Canada",
+  "countryCode": "CA",
+  "region": "QC",
+  "regionName": "Quebec",
+  "city": "Montreal",
+  "lat": 45.6085,
+  "lon": -73.5493,
+  "isp": "Le Groupe Videotron Ltee",
+  "as": "AS5769 Videotron Ltee",
+  "hosting": false
+}
+________________________________________
+9. API Fields Needed for Display & Map
+Fields that should be usable by the UI:
+•	Country
+•	Country code
+•	Region or region name (smart selection)
+•	City
+•	Latitude
+•	Longitude
+•	ISP
+•	AS
+•	Hosting (boolean)
+Logic note:
+•	The UI should choose region vs regionName appropriately
+•	lat/lon are required for map rendering later
+________________________________________
+10. Database Storage Expectations
+What does NOT need to be stored from getpeerinfo
+•	Most per-refresh stats
+•	Anything that changes every 10 seconds
+What SHOULD be stored persistently
+•	Address / IP
+•	Network type
+•	Geo status (GEO_OK, PRIVATE, GEO_UNAVAILABLE)
+•	All geo API fields (except status)
+•	first_seen
+•	last_seen
+•	Lookup timestamps for retry logic
+The database should support:
+•	caching
+•	retry cadence
+•	future map placement
+•	historical “first seen / last seen” display
+________________________________________
