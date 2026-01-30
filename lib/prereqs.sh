@@ -5,6 +5,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/ui.sh"
 
+# Get base directory (parent of lib/)
+MBTC_BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VENV_DIR="$MBTC_BASE_DIR/venv"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PREREQUISITE DEFINITIONS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -27,10 +31,18 @@ declare -a BITCOIN_TOOLS=(
     "bitcoind|Bitcoin Core daemon"
 )
 
-# Python packages (checked separately)
-declare -a PYTHON_PACKAGES=(
+# Python packages - Terminal mode (required for basic functionality)
+declare -a PYTHON_TERMINAL_PACKAGES=(
     "rich|Rich terminal UI library"
     "requests|HTTP library for API calls"
+)
+
+# Python packages - Web mode (required for web dashboard)
+declare -a PYTHON_WEB_PACKAGES=(
+    "fastapi|FastAPI web framework"
+    "uvicorn|ASGI server for FastAPI"
+    "jinja2|Template engine for FastAPI"
+    "sse_starlette|Server-Sent Events for FastAPI"
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -65,6 +77,73 @@ is_root() {
 # Check if sudo is available
 has_sudo() {
     command -v sudo &>/dev/null && sudo -n true 2>/dev/null
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VENV FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Check if venv exists and is valid
+venv_exists() {
+    [[ -d "$VENV_DIR" && -f "$VENV_DIR/bin/python3" ]]
+}
+
+# Create virtual environment
+create_venv() {
+    msg_info "Creating virtual environment in ./venv/..."
+
+    if python3 -m venv "$VENV_DIR" 2>/dev/null; then
+        msg_ok "Virtual environment created"
+        return 0
+    else
+        msg_err "Failed to create virtual environment"
+        msg_info "You may need to install python3-venv:"
+        msg_info "  Debian/Ubuntu: sudo apt install python3-venv"
+        msg_info "  Fedora: sudo dnf install python3-virtualenv"
+        return 1
+    fi
+}
+
+# Get the pip command for venv
+get_venv_pip() {
+    echo "$VENV_DIR/bin/pip"
+}
+
+# Get the python command for venv
+get_venv_python() {
+    echo "$VENV_DIR/bin/python3"
+}
+
+# Check if package is installed in venv
+venv_pkg_exists() {
+    local pkg="$1"
+    if venv_exists; then
+        "$VENV_DIR/bin/python3" -c "import $pkg" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
+# Install package in venv
+install_venv_pkg() {
+    local pkg="$1"
+    local pip_cmd
+    pip_cmd=$(get_venv_pip)
+
+    # Handle package name vs import name differences
+    local install_name="$pkg"
+    case "$pkg" in
+        sse_starlette) install_name="sse-starlette" ;;
+    esac
+
+    msg_info "Installing $pkg..."
+    if "$pip_cmd" install "$install_name" --quiet 2>/dev/null; then
+        msg_ok "Installed $pkg"
+        return 0
+    else
+        msg_err "Failed to install $pkg"
+        return 1
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -261,7 +340,7 @@ run_prereq_check() {
         fi
     done
 
-    # Check Python packages
+    # Check Python packages using venv
     run_python_check
 
     print_section_end
@@ -275,94 +354,231 @@ quick_prereq_check() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PYTHON PACKAGE CHECKING
+# PYTHON PACKAGE CHECKING (VENV-BASED)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Check if Python package is installed
-python_pkg_exists() {
-    local pkg="$1"
-    python3 -c "import $pkg" 2>/dev/null
-}
-
-# Install Python package
-install_python_pkg() {
-    local pkg="$1"
-    local desc="$2"
-
-    msg_info "Installing Python package: $pkg..."
-
-    # Try pip3 first, then pip
-    if command -v pip3 &>/dev/null; then
-        if pip3 install --user "$pkg" &>/dev/null; then
-            msg_ok "Installed $pkg"
-            return 0
-        fi
-    elif command -v pip &>/dev/null; then
-        if pip install --user "$pkg" &>/dev/null; then
-            msg_ok "Installed $pkg"
-            return 0
-        fi
-    fi
-
-    msg_err "Failed to install $pkg"
-    msg_info "Try: pip3 install $pkg"
-    return 1
-}
-
-# Check all Python packages
-check_python_packages() {
-    MISSING_PYTHON=()
-    PRESENT_PYTHON=()
-
-    for entry in "${PYTHON_PACKAGES[@]}"; do
-        IFS='|' read -r pkg desc <<< "$entry"
-
-        if python_pkg_exists "$pkg"; then
-            PRESENT_PYTHON+=("$pkg|$desc")
-        else
-            MISSING_PYTHON+=("$pkg|$desc")
-        fi
-    done
-}
-
-# Run Python package check with UI
+# Check Python packages and setup venv if needed
+# Sets global: PYTHON_MODE ("full", "terminal", "none")
 run_python_check() {
     # Skip if python3 not installed
     if ! cmd_exists python3; then
+        PYTHON_MODE="none"
         return 1
     fi
 
     echo ""
-    echo -e "${T_DIM}Python packages:${RST}"
+    echo -e "${T_DIM}Checking your python...${RST}"
 
-    check_python_packages
+    # Check if venv exists
+    if ! venv_exists; then
+        msg_warn "No virtual environment found"
+    fi
 
-    # Show present packages
-    for item in "${PRESENT_PYTHON[@]}"; do
-        IFS='|' read -r pkg desc <<< "$item"
-        msg_ok "${pkg} ${T_DIM}(${desc})${RST}"
+    # Check terminal packages
+    local missing_terminal=()
+    local present_terminal=()
+
+    for entry in "${PYTHON_TERMINAL_PACKAGES[@]}"; do
+        IFS='|' read -r pkg desc <<< "$entry"
+        if venv_pkg_exists "$pkg"; then
+            present_terminal+=("$pkg|$desc")
+        else
+            missing_terminal+=("$pkg|$desc")
+        fi
     done
 
-    # Handle missing packages
-    if [[ ${#MISSING_PYTHON[@]} -gt 0 ]]; then
-        echo ""
-        msg_warn "Missing Python packages:"
-        for item in "${MISSING_PYTHON[@]}"; do
+    # Check web packages
+    local missing_web=()
+    local present_web=()
+
+    for entry in "${PYTHON_WEB_PACKAGES[@]}"; do
+        IFS='|' read -r pkg desc <<< "$entry"
+        if venv_pkg_exists "$pkg"; then
+            present_web+=("$pkg|$desc")
+        else
+            missing_web+=("$pkg|$desc")
+        fi
+    done
+
+    # Determine what's missing
+    local need_venv=0
+    local need_terminal=0
+    local need_web=0
+
+    if ! venv_exists; then
+        need_venv=1
+    fi
+    if [[ ${#missing_terminal[@]} -gt 0 ]]; then
+        need_terminal=1
+    fi
+    if [[ ${#missing_web[@]} -gt 0 ]]; then
+        need_web=1
+    fi
+
+    # If nothing missing, we're good - show success message
+    if [[ $need_terminal -eq 0 && $need_web -eq 0 ]]; then
+        msg_ok "Nice package, it slipped right into the virtual environment"
+        for item in "${present_terminal[@]}"; do
             IFS='|' read -r pkg desc <<< "$item"
             msg_bullet "${pkg} ${T_DIM}(${desc})${RST}"
         done
-
         echo ""
-        if prompt_yn "Install missing Python packages?"; then
-            for item in "${MISSING_PYTHON[@]}"; do
-                IFS='|' read -r pkg desc <<< "$item"
-                install_python_pkg "$pkg" "$desc"
-            done
-        else
-            msg_warn "Some features may not work without required Python packages"
-            return 1
-        fi
+        echo -e "${T_DIM}Checking dashboard site necessities...${RST}"
+        for item in "${present_web[@]}"; do
+            IFS='|' read -r pkg desc <<< "$item"
+            msg_ok "${pkg} ${T_DIM}(${desc})${RST}"
+        done
+        PYTHON_MODE="full"
+        return 0
     fi
 
+    # Show what's missing
+    if [[ $need_terminal -eq 1 ]]; then
+        msg_warn "No package found... (required):"
+        for item in "${missing_terminal[@]}"; do
+            IFS='|' read -r pkg desc <<< "$item"
+            msg_bullet "${pkg} ${T_DIM}(${desc})${RST}"
+        done
+    fi
+
+    echo ""
+    echo -e "${T_DIM}Checking dashboard site necessities:${RST}"
+    if [[ $need_web -eq 1 ]]; then
+        msg_warn "Missing:"
+        for item in "${missing_web[@]}"; do
+            IFS='|' read -r pkg desc <<< "$item"
+            msg_bullet "${pkg} ${T_DIM}(${desc})${RST}"
+        done
+    fi
+
+    echo ""
+
+    # Offer to install
+    if prompt_yn "Setup virtual environment and install packages?"; then
+        # Create venv if needed
+        if [[ $need_venv -eq 1 ]]; then
+            echo ""
+            echo -e "Creating virtual environment..."
+            echo -e "${T_DIM}──────────────────────────────────${RST}"
+            if ! create_venv; then
+                msg_err "Cannot proceed without virtual environment"
+                PYTHON_MODE="none"
+                return 1
+            fi
+
+            # Upgrade pip
+            msg_info "Upgrading pip..."
+            if "$VENV_DIR/bin/pip" install --upgrade pip --quiet 2>/dev/null; then
+                msg_ok "Pip upgraded"
+            fi
+        fi
+
+        # Install terminal packages first (required)
+        local terminal_failed=0
+        if [[ $need_terminal -eq 1 ]]; then
+            echo ""
+            echo -e "Installing terminal packages..."
+            echo -e "${T_DIM}───────────────────────────────────${RST}"
+            for item in "${missing_terminal[@]}"; do
+                IFS='|' read -r pkg desc <<< "$item"
+                if ! install_venv_pkg "$pkg"; then
+                    terminal_failed=1
+                fi
+            done
+        fi
+
+        if [[ $terminal_failed -eq 1 ]]; then
+            msg_err "Failed to install required terminal packages"
+            msg_err "The program cannot run without these packages"
+            PYTHON_MODE="none"
+            return 1
+        fi
+
+        # Install web packages
+        local web_failed=0
+        if [[ $need_web -eq 1 ]]; then
+            echo ""
+            echo -e "Installing web dashboard packages..."
+            echo -e "${T_DIM}────────────────────────────────────${RST}"
+            for item in "${missing_web[@]}"; do
+                IFS='|' read -r pkg desc <<< "$item"
+                if ! install_venv_pkg "$pkg"; then
+                    web_failed=1
+                fi
+            done
+        fi
+
+        if [[ $web_failed -eq 1 ]]; then
+            echo ""
+            msg_warn "Some web packages failed to install"
+            msg_warn "Web dashboard will not be available"
+            msg_ok "Terminal mode will work normally"
+            PYTHON_MODE="terminal"
+            return 0
+        fi
+
+        echo ""
+        echo -e "${T_SUCCESS}** All packages installed successfully!! **${RST}"
+        PYTHON_MODE="full"
+        return 0
+    else
+        # User declined - offer options
+        echo ""
+        msg_warn "Python packages are required to run this program."
+        echo ""
+        echo "Options:"
+        echo "  1) Install packages (recommended)"
+        echo "  2) Continue without web dashboard (terminal only)"
+        echo "  3) Exit"
+        echo ""
+        echo -en "${T_PROMPT}Choose [1-3]: ${RST}"
+        read -r choice
+
+        case "$choice" in
+            1)
+                # Recursively call to install
+                run_python_check
+                return $?
+                ;;
+            2)
+                if [[ $need_terminal -eq 1 ]]; then
+                    msg_err "Terminal packages are required even for terminal-only mode"
+                    msg_err "Please install packages or exit"
+                    PYTHON_MODE="none"
+                    return 1
+                fi
+                msg_warn "Continuing in terminal-only mode"
+                msg_warn "Web dashboard will not be available"
+                PYTHON_MODE="terminal"
+                return 0
+                ;;
+            *)
+                msg_info "Exiting..."
+                PYTHON_MODE="none"
+                exit 0
+                ;;
+        esac
+    fi
+}
+
+# Check if web mode is available
+is_web_available() {
+    for entry in "${PYTHON_WEB_PACKAGES[@]}"; do
+        IFS='|' read -r pkg desc <<< "$entry"
+        if ! venv_pkg_exists "$pkg"; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Check if terminal mode is available
+is_terminal_available() {
+    for entry in "${PYTHON_TERMINAL_PACKAGES[@]}"; do
+        IFS='|' read -r pkg desc <<< "$entry"
+        if ! venv_pkg_exists "$pkg"; then
+            return 1
+        fi
+    done
     return 0
 }

@@ -1,0 +1,228 @@
+================================================================================
+CLAUDE LOOK HERE - MBTC-DASH Development Checklist
+================================================================================
+
+Last Updated: 2026-01-30
+Current Version: 0.2.3
+
+================================================================================
+** DISCUSSION ITEM FOR NEXT SESSION **
+================================================================================
+
+User wants to DISCUSS (not implement yet) options for making the dashboard
+load faster. Ideas to explore:
+
+  - Multiple databases (separate DB for different data types?)
+  - Other caching strategies
+  - Lazy loading / pagination for peer table
+  - Background pre-fetching
+  - Any other performance optimization ideas
+
+The addrman feature was removed because it was calling `getnodeaddresses 0`
+which returns thousands of addresses and was blocking startup for 40+ seconds.
+Could potentially add it back in a non-blocking way if desired.
+
+================================================================================
+USER SETTINGS / DECISIONS
+================================================================================
+
+Database Location: ./data/ folder (local to project)
+Database stores: IP only (no port) for geo cache
+  - Multiple peers can share same IP on different ports
+  - Display full ip:port in tables
+  - Show warning when multiple peers share same IP
+
+Web Dashboard Layout (top to bottom):
+  1. MAP - shows peer locations
+  2. Main Peer Table - full peer list
+  3. Recent Changes Table - adds/removes in last 20 seconds (same columns as main)
+
+Map Library: Professional, free, lightweight (Leaflet.js)
+Web Port: Fixed 58333 (fallback to random if taken)
+Framework: FastAPI (not Flask)
+Auth: Username "admin", random 5-char password per session
+
+Addrman Cache: REMOVED (was causing 40+ second startup delay)
+  - Was using `getnodeaddresses 0` to get all known addresses
+  - Can discuss adding back in a non-blocking way if desired
+
+Python Dependencies: Installed in local ./venv/ folder
+  - Terminal packages: rich, requests
+  - Web packages: fastapi, uvicorn, jinja2, sse-starlette
+  - Easy uninstall: just delete ./venv/ folder
+
+================================================================================
+CRITICAL REQUIREMENTS (FROM PROJ-PLAN)
+================================================================================
+
+[!] PEER LIST MUST:
+  - Show table IMMEDIATELY with all peers
+  - Update locations in REAL TIME as geo lookups complete
+  - Do NOT wait for all geo lookups to finish
+  - New peers that connect mid-session MUST trigger geo lookups
+  - 'q' should quit (not require Ctrl+C)
+  - Table should be scrollable
+
+================================================================================
+GEO-LOOKUP LOGIC
+================================================================================
+
+Address Classification:
+  [ ] Onion (.onion) -> PRIVATE LOCATION, skip API
+  [ ] I2P (.i2p) -> PRIVATE LOCATION, skip API
+  [ ] CJDNS (fc/fd prefix) -> PRIVATE LOCATION, skip API
+  [ ] RFC1918 IPv4 (10.x, 172.16-31.x, 192.168.x) -> PRIVATE LOCATION, skip API
+  [ ] Private IPv6 -> PRIVATE LOCATION, skip API
+  [ ] Public IPv4/IPv6 -> Attempt geo lookup
+
+Future Map Placement:
+  - PRIVATE LOCATION -> Antarctica
+  - LOCATION UNAVAILABLE -> North Pole
+  - Public geo -> real lat/lon
+
+================================================================================
+GEO CACHE STRATEGY
+================================================================================
+
+When public IP appears:
+  1. If in DB with geo_status = GEO_OK -> Use cached, NO API call
+  2. If in DB with geo_status = PRIVATE -> Use cached, NO API call
+  3. If in DB with geo_status = GEO_UNAVAILABLE:
+     - Retry ONLY if: now - geo_last_lookup > retry_interval
+     - Retry cadence: 1 day -> 3 days -> 7 days -> forever 7 days
+  4. If NOT in DB -> Call API once, insert row
+
+Reset options needed (future):
+  [ ] Reset only unavailable entries
+  [ ] Reset entire geo cache
+
+================================================================================
+DISPLAY COLUMNS (Terminal + Web)
+================================================================================
+
+Default visible:
+  - Peer ID
+  - IP
+  - Port
+  - Direction (IN/OUT)
+  - Protocol/Network
+  - Country
+  - State/Region
+  - City
+  - Version/subver (with node name)
+  - Ping (ms)
+  - Bytes received
+  - Bytes sent
+  - Last received time (Eastern)
+  - Last sent time (Eastern)
+
+Additional fields (available but maybe not default):
+  - Services (abbreviated: N W NL P with tooltip)
+  - Time Connected (formatted: Xm, Xh Xm, Xd Xh)
+  - Relay/Throttle status (addr_relay_enabled, addr_rate_limited)
+  - Connection type (outbound-full-relay, etc)
+
+Sorting: Default by Peer ID (preserves connection order)
+
+================================================================================
+DATABASE STORAGE
+================================================================================
+
+Store persistently:
+  - IP address (no port)
+  - Network type
+  - geo_status (GEO_OK=0, PRIVATE=1, GEO_UNAVAILABLE=2)
+  - All geo API fields (country, countryCode, region, regionName, city,
+    district, lat, lon, isp, as, hosting)
+  - first_seen timestamp
+  - last_seen timestamp
+  - geo_last_lookup timestamp
+  - geo_retry_count
+
+Do NOT store (changes too frequently):
+  - Most getpeerinfo stats
+  - Anything that changes every 10 seconds
+
+================================================================================
+TODO CHECKLIST
+================================================================================
+
+TERMINAL PEER LIST:
+  [x] Show table immediately without waiting for geo
+  [x] Background thread(s) for geo lookups
+  [x] Live update display as geo completes
+  [x] Detect new peers mid-session, queue geo lookups
+  [x] 'q' quits properly
+  [ ] Scrolling works (terminal limits rows, shows "X more peers")
+
+DATABASE:
+  [x] Database in ./data/peers.db
+  [ ] Gracefully handle multiple peers with same IP
+  [ ] Verify all geo cache rules implemented
+
+PREREQS/DEPENDENCIES:
+  [x] Add FastAPI to prereqs check
+  [x] Add uvicorn to prereqs check
+  [x] Add any other web dependencies (jinja2, sse-starlette)
+  [x] Offer to install missing deps (da.sh prompts to install)
+  [ ] Track what THIS program installs (for uninstaller)
+
+UNINSTALLER:
+  [ ] Create tracking of installed dependencies
+  [ ] Uninstaller removes only what we installed
+  [ ] Does not affect pre-existing packages
+
+WEB DASHBOARD:
+  [x] FastAPI server (not Flask)
+  [x] Dynamic port selection (49152-65535)
+  [x] Port conflict detection
+  [x] Single password auth for remote access
+  [x] Detect local IPs/interfaces
+  [x] Show user correct URL to access
+  [x] Map at top (Leaflet.js with CartoDB dark tiles)
+  [x] Main peer table
+  [x] Recent changes table (20 second window)
+  [x] Clean shutdown on Ctrl+C
+  [ ] DB integrity check on startup
+
+DOCUMENTATION:
+  [ ] Update PROJECT_PROGRESS.md
+  [ ] Update PROJ-Plan with [DONE] markers
+  [ ] Update PREREQS.md
+  [ ] Update README.md
+
+================================================================================
+COMPLETED ITEMS
+================================================================================
+
+[x] Config saved to ./data/config.conf (2026-01-29)
+[x] Database path set to ./data/peers.db (2026-01-29)
+[x] Removed unnecessary backwards compatibility code (2026-01-29)
+[x] Peer list shows immediately - no blocking on geo lookups (2026-01-29)
+[x] Background thread for geo lookups (2026-01-29)
+[x] Live display updates as geo completes (2026-01-29)
+[x] New peers queued for geo lookup automatically (2026-01-29)
+[x] RFC1918 private IP detection added (2026-01-29)
+[x] 'q' properly quits peer list (2026-01-29)
+[x] Ctrl+C handled gracefully (2026-01-29)
+[x] CLAUDE-CHECKLIST.txt created (2026-01-29)
+[x] Addrman (AM) column added to terminal peer list (2026-01-30)
+[x] FastAPI web dashboard created (2026-01-30)
+[x] Web dashboard - Leaflet map with peer locations (2026-01-30)
+[x] Web dashboard - Main peer table with sorting (2026-01-30)
+[x] Web dashboard - Recent changes table (20s window) (2026-01-30)
+[x] Web dashboard - Server-Sent Events for real-time updates (2026-01-30)
+[x] Web dashboard - Dynamic port selection (49152-65535) (2026-01-30)
+[x] Web dashboard - Session password auth (2026-01-30)
+[x] Prerequisites updated with FastAPI/uvicorn/jinja2/sse-starlette (2026-01-30)
+[x] Python dependencies now use local ./venv/ folder (2026-01-30)
+[x] Fixed prereqs flow - proper handling when install fails (2026-01-30)
+[x] Added terminal-only fallback option (2026-01-30)
+[x] Documented addrman is session-only (in memory) (2026-01-30)
+[x] Updated stats bar - removed geo/private, added timer/time, in/out counts (2026-01-30)
+[x] Updated table columns per user spec (2026-01-30)
+[x] Updated startup screen with clearer instructions (2026-01-30)
+[x] Removed addrman to fix slow startup (was 40+ seconds) (2026-01-30)
+[x] Added troubleshooting note about old browser tabs (2026-01-30)
+
+================================================================================
