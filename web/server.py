@@ -113,6 +113,13 @@ peer_ip_map_lock = threading.Lock()
 geo_pending_count = 0
 geo_pending_lock = threading.Lock()
 
+# Historical data cache: {ip: {first_seen, last_seen, times_seen}}
+history_cache = {}
+history_cache_lock = threading.Lock()
+
+# Queue for background DB writes (non-blocking)
+history_queue = queue.Queue()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIG
@@ -256,6 +263,79 @@ def get_db_stats() -> dict:
     conn.close()
     return {'total': row[0] or 0, 'geo_ok': row[1] or 0,
             'private': row[2] or 0, 'unavailable': row[3] or 0}
+
+
+def load_history_cache():
+    """Load all historical data from DB into memory on startup"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.execute('SELECT ip, first_seen, last_seen, connection_count FROM peers_geo')
+    with history_cache_lock:
+        for row in cursor.fetchall():
+            history_cache[row[0]] = {
+                'first_seen': row[1] or 0,
+                'last_seen': row[2] or 0,
+                'times_seen': row[3] or 0
+            }
+    conn.close()
+
+
+def get_history(ip: str) -> dict:
+    """Get historical data from cache (instant)"""
+    with history_cache_lock:
+        return history_cache.get(ip, {'first_seen': 0, 'last_seen': 0, 'times_seen': 0})
+
+
+def update_history(ip: str, network_type: str):
+    """Update history in cache and queue DB write"""
+    now = int(time.time())
+    with history_cache_lock:
+        if ip in history_cache:
+            # Existing IP - update last_seen, increment times_seen
+            history_cache[ip]['last_seen'] = now
+            history_cache[ip]['times_seen'] = history_cache[ip].get('times_seen', 0) + 1
+        else:
+            # New IP - set first_seen
+            history_cache[ip] = {
+                'first_seen': now,
+                'last_seen': now,
+                'times_seen': 1
+            }
+        # Queue for background DB write
+        history_queue.put((ip, network_type, history_cache[ip].copy()))
+
+
+def history_db_worker():
+    """Background thread for writing history to DB (non-blocking)"""
+    while not stop_flag.is_set():
+        try:
+            ip, network_type, data = history_queue.get(timeout=1)
+        except queue.Empty:
+            continue
+
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            # Check if exists
+            cursor = conn.execute('SELECT first_seen FROM peers_geo WHERE ip = ?', (ip,))
+            row = cursor.fetchone()
+
+            if row:
+                # Update existing
+                conn.execute('''
+                    UPDATE peers_geo
+                    SET last_seen = ?, connection_count = ?
+                    WHERE ip = ?
+                ''', (data['last_seen'], data['times_seen'], ip))
+            else:
+                # Insert new
+                conn.execute('''
+                    INSERT INTO peers_geo (ip, network_type, first_seen, last_seen, connection_count)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (ip, network_type, data['first_seen'], data['last_seen'], data['times_seen']))
+
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"History DB error: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -509,10 +589,13 @@ def refresh_worker():
             with peer_ip_map_lock:
                 peer_ip_map[peer_id] = {'ip': ip, 'port': port, 'network': network_type}
 
-            # New peer connected
-            if peer_id not in previous_ids and previous_ids:
-                with changes_lock:
-                    recent_changes.append((now, 'connected', {'ip': ip, 'port': port, 'network': network_type}))
+            # New peer connected (or first run)
+            if peer_id not in previous_ids:
+                if previous_ids:  # Only add to changes after first run
+                    with changes_lock:
+                        recent_changes.append((now, 'connected', {'ip': ip, 'port': port, 'network': network_type}))
+                # Update historical data (first_seen, last_seen, times_seen)
+                update_history(ip, network_type)
 
             # Queue geo lookup if not already cached
             cached = get_cached_geo(ip)
@@ -679,10 +762,10 @@ async def api_peers(auth: bool = Depends(verify_password)):
             'lon': geo.get('lon', 0) if geo else 0,
             'isp': geo.get('isp', '') if geo else '',
 
-            # 24-26: historical (TODO: load from DB in background)
-            'first_seen': 0,  # Will be populated later
-            'last_seen': 0,
-            'times_seen': 0,
+            # 24-26: historical (from cache, loaded from DB on startup)
+            'first_seen': get_history(ip).get('first_seen', 0),
+            'last_seen': get_history(ip).get('last_seen', 0),
+            'times_seen': get_history(ip).get('times_seen', 0),
 
             # Extra fields for UI
             'location': location,
@@ -816,6 +899,7 @@ def main():
 
     # Initialize
     init_database()
+    load_history_cache()  # Load historical data from DB into memory
 
     if not config.load():
         print("Error: Configuration not found. Run ./da.sh first to configure.")
@@ -844,6 +928,9 @@ def main():
     refresh_thread = threading.Thread(target=refresh_worker, daemon=True)
     refresh_thread.start()
 
+    history_thread = threading.Thread(target=history_db_worker, daemon=True)
+    history_thread.start()
+
     # Get primary LAN IP (first non-localhost)
     lan_ip = local_ips[0] if local_ips else "127.0.0.1"
     subnet = subnets[0] if subnets else "192.168.0.0/16"
@@ -852,7 +939,7 @@ def main():
     line_w = 84
     print("")
     print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
-    print(f"  {C_BOLD}{C_WHITE}MBTC-DASH Web Dashboard{C_RESET}")
+    print(f"  {C_BOLD}{C_WHITE}MBCore Dashboard - Peer info, map, and tools for Bitcoin Core{C_RESET}")
     print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
     print(f"  {C_BOLD}{C_YELLOW}** FOLLOW THESE INSTRUCTIONS TO GET TO THE DASHBOARD! **{C_RESET}")
     print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
