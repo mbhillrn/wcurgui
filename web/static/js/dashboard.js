@@ -512,16 +512,28 @@ async function fetchStats() {
             }
         });
 
-        // Hide last visible separator (for cleaner look)
-        let lastVisibleSep = null;
-        networkNames.forEach(net => {
+        // Show/hide separators correctly between enabled networks
+        // Each sep-X comes AFTER count-X, so we hide sep-X if the NEXT network is not visible
+        for (let i = 0; i < networkNames.length - 1; i++) {
+            const net = networkNames[i];
             const sepEl = document.getElementById(`sep-${net}`);
-            if (sepEl && sepEl.style.display !== 'none') {
-                lastVisibleSep = sepEl;
+            if (!sepEl) continue;
+
+            // Check if any network AFTER this one is enabled
+            let nextEnabled = false;
+            for (let j = i + 1; j < networkNames.length; j++) {
+                if (enabled.includes(networkNames[j])) {
+                    nextEnabled = true;
+                    break;
+                }
             }
-        });
-        if (lastVisibleSep) {
-            lastVisibleSep.style.display = 'none';
+
+            // Show separator only if current network is enabled AND a later network is enabled
+            if (enabled.includes(net) && nextEnabled) {
+                sepEl.style.display = '';
+            } else {
+                sepEl.style.display = 'none';
+            }
         }
 
         // Update map status indicator
