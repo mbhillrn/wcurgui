@@ -776,22 +776,6 @@ async def api_stats(auth: bool = Depends(verify_password)):
     }
 
 
-@app.post("/api/shutdown")
-async def api_shutdown(auth: bool = Depends(verify_password)):
-    """Gracefully shutdown the server"""
-    import os
-    import signal
-
-    def shutdown():
-        time.sleep(0.5)  # Give time for response to be sent
-        stop_flag.set()
-        os.kill(os.getpid(), signal.SIGTERM)
-
-    # Start shutdown in background thread
-    threading.Thread(target=shutdown, daemon=True).start()
-    return {"status": "shutting_down"}
-
-
 @app.get("/api/events")
 async def api_events(request: Request):
     """Server-Sent Events endpoint for real-time updates"""
@@ -937,6 +921,9 @@ def main():
     print("")
     print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
     print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop serving the dashboard")
+    print(f"  {C_DIM}(Stopping may take 10-20 seconds){C_RESET}")
+    print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
+    print(f"  {C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
     print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
     print("")
 

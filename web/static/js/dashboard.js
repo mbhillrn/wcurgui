@@ -72,7 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupColumnResize();
     setupColumnConfig();
     setupPanelResize();
-    setupShutdownButton();
     initMap();
     fetchPeers();
     fetchStats();
@@ -143,43 +142,6 @@ function setupColumnResize() {
     });
 }
 
-// Setup shutdown button
-function setupShutdownButton() {
-    const btn = document.getElementById('shutdown-btn');
-    if (!btn) return;
-
-    btn.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to stop the dashboard server?')) {
-            return;
-        }
-
-        try {
-            btn.disabled = true;
-            btn.textContent = 'Stopping...';
-
-            const response = await fetch(`${API_BASE}/api/shutdown`, { method: 'POST' });
-            if (response.ok) {
-                document.body.innerHTML = `
-                    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #0d1117; color: #8b949e; font-family: monospace;">
-                        <div style="text-align: center;">
-                            <h1 style="color: #58a6ff;">Dashboard Stopped</h1>
-                            <p>The server has been shut down gracefully.</p>
-                            <p style="color: #6e7681;">You can close this tab.</p>
-                        </div>
-                    </div>
-                `;
-            } else {
-                throw new Error('Shutdown failed');
-            }
-        } catch (error) {
-            console.error('Shutdown error:', error);
-            btn.disabled = false;
-            btn.textContent = 'Stop';
-            alert('Failed to stop the server. Check the terminal.');
-        }
-    });
-}
-
 // Setup panel resize handles
 function setupPanelResize() {
     const handles = document.querySelectorAll('.resize-handle');
@@ -232,7 +194,7 @@ function initMap() {
 
     map = L.map('map', {
         center: [20, 0],
-        zoom: 2,
+        zoom: 1,                   // Zoomed out to show whole world
         minZoom: 1,
         maxZoom: 18,
         worldCopyJump: true,       // Single-extent mode: wrap at edges
