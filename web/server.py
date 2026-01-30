@@ -86,9 +86,6 @@ peers_lock = threading.Lock()
 recent_changes = []
 changes_lock = threading.Lock()
 
-addrman_ips = set()
-addrman_lock = threading.Lock()
-
 geo_queue = queue.Queue()
 pending_lookups = set()
 pending_lock = threading.Lock()
@@ -375,25 +372,6 @@ def get_enabled_networks() -> list:
     return enabled if enabled else ['ipv4']
 
 
-def refresh_addrman():
-    global addrman_ips
-    try:
-        cmd = config.get_cli_command() + ['getnodeaddresses', '0']
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            new_ips = {e.get('address', '') for e in data if e.get('address')}
-            with addrman_lock:
-                addrman_ips = new_ips
-    except:
-        pass
-
-
-def is_in_addrman(ip: str) -> bool:
-    with addrman_lock:
-        return ip in addrman_ips
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # GEO LOOKUP
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -497,9 +475,6 @@ def refresh_worker():
             recent_changes = [(t, c, p) for t, c, p in recent_changes if now - t < RECENT_WINDOW]
 
         previous_ids = current_ids
-
-        # Refresh addrman
-        refresh_addrman()
 
         # Broadcast update
         broadcast_update('peers_update', {})
@@ -605,7 +580,6 @@ async def api_peers(auth: bool = Depends(verify_password)):
             'addr': addr,
             'direction': 'IN' if peer.get('inbound') else 'OUT',
             'network': network_type,
-            'in_addrman': is_in_addrman(ip),
             'location': location,
             'location_status': location_status,
             'country': geo.get('country', '') if geo else '',
@@ -788,9 +762,6 @@ def main():
     refresh_thread = threading.Thread(target=refresh_worker, daemon=True)
     refresh_thread.start()
 
-    # Initial data fetch
-    refresh_addrman()
-
     # Get primary LAN IP (first non-localhost)
     lan_ip = local_ips[0] if local_ips else "127.0.0.1"
     subnet = subnets[0] if subnets else "192.168.0.0/16"
@@ -815,10 +786,12 @@ def main():
     print("")
     print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
     print(f"  {C_BOLD}{C_RED}TROUBLESHOOTING:{C_RESET}")
-    print(f"  {C_DIM}If you receive an error or the page refuses to load,{C_RESET}")
-    print(f"  {C_DIM}please ensure that your firewall allows port {port}/tcp{C_RESET}")
+    print(f"  {C_DIM}If you receive an error or the page refuses to load:{C_RESET}")
+    print(f"  {C_DIM}  - Ensure your firewall allows port {port}/tcp{C_RESET}")
+    print(f"  {C_DIM}  - Close any dashboard tabs left open from a previous session{C_RESET}")
+    print(f"  {C_DIM}    (old tabs wait for credentials that no longer work){C_RESET}")
     print("")
-    print(f"  {C_RED}EXAMPLES (UBUNTU/MINT):{C_RESET}")
+    print(f"  {C_RED}FIREWALL EXAMPLES (UBUNTU/MINT):{C_RESET}")
     print(f"    {C_DIM}Option 1:{C_RESET}  sudo ufw allow {port}/tcp")
     print(f"    {C_DIM}Option 2:{C_RESET}  sudo ufw allow from {subnet} to any port {port} proto tcp")
     print("")
