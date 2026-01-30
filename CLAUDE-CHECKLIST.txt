@@ -3,7 +3,24 @@ CLAUDE LOOK HERE - MBTC-DASH Development Checklist
 ================================================================================
 
 Last Updated: 2026-01-30
-Current Version: 0.2.2
+Current Version: 0.2.3
+
+================================================================================
+** DISCUSSION ITEM FOR NEXT SESSION **
+================================================================================
+
+User wants to DISCUSS (not implement yet) options for making the dashboard
+load faster. Ideas to explore:
+
+  - Multiple databases (separate DB for different data types?)
+  - Other caching strategies
+  - Lazy loading / pagination for peer table
+  - Background pre-fetching
+  - Any other performance optimization ideas
+
+The addrman feature was removed because it was calling `getnodeaddresses 0`
+which returns thousands of addresses and was blocking startup for 40+ seconds.
+Could potentially add it back in a non-blocking way if desired.
 
 ================================================================================
 USER SETTINGS / DECISIONS
@@ -21,14 +38,13 @@ Web Dashboard Layout (top to bottom):
   3. Recent Changes Table - adds/removes in last 20 seconds (same columns as main)
 
 Map Library: Professional, free, lightweight (Leaflet.js)
-Web Port: Dynamic per run in 49152-65535 range, auto-detect conflicts
+Web Port: Fixed 58333 (fallback to random if taken)
 Framework: FastAPI (not Flask)
-Auth: Single password prompt per startup for remote/LAN access
+Auth: Username "admin", random 5-char password per session
 
-Addrman Cache: SESSION-ONLY (in memory, refreshed every 60 seconds)
-  - Uses `getnodeaddresses 0` to get all known addresses
-  - NOT persisted to disk - resets each time program starts
-  - This is intentional - addrman data changes frequently
+Addrman Cache: REMOVED (was causing 40+ second startup delay)
+  - Was using `getnodeaddresses 0` to get all known addresses
+  - Can discuss adding back in a non-blocking way if desired
 
 Python Dependencies: Installed in local ./venv/ folder
   - Terminal packages: rich, requests
@@ -203,5 +219,10 @@ COMPLETED ITEMS
 [x] Fixed prereqs flow - proper handling when install fails (2026-01-30)
 [x] Added terminal-only fallback option (2026-01-30)
 [x] Documented addrman is session-only (in memory) (2026-01-30)
+[x] Updated stats bar - removed geo/private, added timer/time, in/out counts (2026-01-30)
+[x] Updated table columns per user spec (2026-01-30)
+[x] Updated startup screen with clearer instructions (2026-01-30)
+[x] Removed addrman to fix slow startup (was 40+ seconds) (2026-01-30)
+[x] Added troubleshooting note about old browser tabs (2026-01-30)
 
 ================================================================================
