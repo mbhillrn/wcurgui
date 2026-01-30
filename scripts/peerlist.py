@@ -85,6 +85,12 @@ pending_lookups_lock = threading.Lock()
 # Flag to stop background thread
 stop_flag = threading.Event()
 
+# Addrman cache (refreshed periodically)
+addrman_ips = set()
+addrman_last_refresh = 0
+addrman_lock = threading.Lock()
+ADDRMAN_REFRESH_INTERVAL = 60  # seconds
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIG LOADING
@@ -428,6 +434,39 @@ def get_peer_info() -> list:
     return []
 
 
+def refresh_addrman():
+    """Refresh the addrman IP cache (called periodically)"""
+    global addrman_ips, addrman_last_refresh
+
+    now = time.time()
+    with addrman_lock:
+        if now - addrman_last_refresh < ADDRMAN_REFRESH_INTERVAL:
+            return  # Still fresh
+
+    try:
+        cmd = config.get_cli_command() + ['getnodeaddresses', '0']
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            new_ips = set()
+            for entry in data:
+                addr = entry.get('address', '')
+                if addr:
+                    new_ips.add(addr)
+
+            with addrman_lock:
+                addrman_ips = new_ips
+                addrman_last_refresh = now
+    except Exception:
+        pass
+
+
+def is_in_addrman(ip: str) -> bool:
+    """Check if IP is in the addrman cache"""
+    with addrman_lock:
+        return ip in addrman_ips
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # BACKGROUND GEO LOOKUP WORKER
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -513,11 +552,11 @@ def format_location(ip: str, network_type: str) -> tuple:
 
     # Check if pending
     if is_geo_pending(ip):
-        return ("Locating...", STYLE_LOCATING)
+        return ("Stalking location...", STYLE_LOCATING)
 
     geo = get_peer_geo(ip)
     if not geo:
-        return ("Locating...", STYLE_LOCATING)
+        return ("Stalking location...", STYLE_LOCATING)
 
     if geo['geo_status'] == GEO_PRIVATE:
         return ("PRIVATE LOCATION", STYLE_WARN)
@@ -556,17 +595,18 @@ def create_peer_table(peers: list, term_height: int) -> Table:
         box=None,
     )
 
-    table.add_column("ID", style="white", width=8)
+    table.add_column("ID", style="white", width=7)
     table.add_column("Address", style="white", width=18)
-    table.add_column("Port", style="white", width=6)
-    table.add_column("Dir", style="white", width=4)
-    table.add_column("Net", style="white", width=6)
-    table.add_column("Location", style="white", width=22)
-    table.add_column("ISP", style="white", width=16)
+    table.add_column("Port", style="white", width=5)
+    table.add_column("Dir", style="white", width=3)
+    table.add_column("Net", style="white", width=5)
+    table.add_column("AM", style="white", width=2)  # Addrman
+    table.add_column("Location", style="white", width=20)
+    table.add_column("ISP", style="white", width=14)
     table.add_column("Ping", style="white", width=6)
     table.add_column("Recv", style="white", width=8)
     table.add_column("Sent", style="white", width=8)
-    table.add_column("Version", style="white", width=18)
+    table.add_column("Version", style="white", width=16)
 
     # Calculate how many rows we can show
     # Reserve space for header (6 lines) + footer (4 lines) + table header (2 lines)
@@ -581,16 +621,21 @@ def create_peer_table(peers: list, term_height: int) -> Table:
 
         # Location with style
         location_text, location_style = format_location(ip, network_type)
-        location = Text(truncate(location_text, 22))
+        location = Text(truncate(location_text, 20))
         if location_style:
             location.stylize(location_style)
 
         # ISP from database
         geo = get_peer_geo(ip)
-        isp = truncate(geo.get('isp', '-') if geo else '-', 16)
+        isp = truncate(geo.get('isp', '-') if geo else '-', 14)
 
         # Direction
         direction = "IN" if peer.get('inbound') else "OUT"
+
+        # Addrman check
+        in_addrman = Text("Y" if is_in_addrman(ip) else "-")
+        if is_in_addrman(ip):
+            in_addrman.stylize(STYLE_SUCCESS)
 
         # Ping
         ping = peer.get('pingtime') or peer.get('pingwait') or 0
@@ -601,14 +646,15 @@ def create_peer_table(peers: list, term_height: int) -> Table:
         recv = format_bytes(peer.get('bytesrecv', 0))
 
         # Version
-        version = truncate(peer.get('subver', '').replace('/', ''), 18)
+        version = truncate(peer.get('subver', '').replace('/', ''), 16)
 
         table.add_row(
             peer_id,
             truncate(ip, 18),
             port,
             direction,
-            network_type[:6],
+            network_type[:5],
+            in_addrman,
             location,
             isp,
             ping_str,
@@ -619,7 +665,7 @@ def create_peer_table(peers: list, term_height: int) -> Table:
 
     if len(peers) > available_rows:
         table.add_row(
-            "", "", "", "", "",
+            "", "", "", "", "", "",
             Text(f"... and {len(peers) - available_rows} more peers", style=STYLE_DIM),
             "", "", "", "", ""
         )
@@ -777,8 +823,9 @@ def main():
         tty.setcbreak(sys.stdin.fileno())
 
         # Initial fetch
-        console.print("[bold cyan]Fetching peers...[/]")
+        console.print("[bold cyan]Fetching peers and addrman...[/]")
         peers = get_peer_info()
+        refresh_addrman()  # Initial addrman fetch
 
         if not peers:
             console.print("[yellow]No peers found. Is bitcoind running?[/]")
@@ -805,6 +852,7 @@ def main():
                     if new_peers:
                         current_peer_ids = process_peers(new_peers, current_peer_ids)
                         peers = new_peers
+                    refresh_addrman()  # Also refresh addrman cache
                     last_refresh = now
 
                 # Calculate countdown
