@@ -77,6 +77,14 @@ body {
     letter-spacing: -0.5px;
 }
 
+.logo-text .version {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-dim);
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
 .subtitle {
     color: var(--text-secondary);
     font-size: 13px;

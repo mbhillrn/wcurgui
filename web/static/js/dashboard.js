@@ -36,8 +36,8 @@ const allColumns = [
 
 // Default visible columns in user's preferred order
 const defaultVisibleColumns = [
-    'direction', 'ip', 'port', 'network', 'subver',
-    'connection_type', 'conntime', 'services_abbrev',
+    'network', 'conntime', 'direction', 'ip', 'port', 'subver',
+    'connection_type', 'services_abbrev',
     'city', 'regionName', 'country', 'continent', 'isp',
     'ping_ms', 'bytessent', 'bytesrecv',
     'in_addrman'

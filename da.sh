@@ -15,7 +15,11 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="2.1.0"
+VERSION="2.2.0"
+GITHUB_REPO="mbhillrn/MBCore-Dashboard"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/da.sh"
+UPDATE_AVAILABLE=0
+LATEST_VERSION=""
 
 # Venv paths
 VENV_DIR="$MBTC_DIR/venv"
@@ -134,6 +138,9 @@ show_menu() {
     echo -e "  ${T_WARN}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
     echo -e "  ${T_WARN}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
     echo -e "  ${T_DIM}t)${RST} Terminal View      ${T_DIM}- Very limited terminal peer list${RST}"
+    if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
+        echo -e "  ${T_WARN}u)${RST} Update             ${T_DIM}- Update to v${LATEST_VERSION}${RST}"
+    fi
     echo ""
     echo -e "  ${T_ERROR}q)${RST} Quit"
     echo ""
@@ -367,11 +374,112 @@ reset_database() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# VERSION CHECK AND AUTO-UPDATE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+check_for_updates() {
+    # Only check if curl is available and we have internet
+    if ! command -v curl &>/dev/null; then
+        return 1
+    fi
+
+    # Fetch the VERSION line from the remote da.sh (with 3 second timeout)
+    local remote_version
+    remote_version=$(curl -s --connect-timeout 3 "$GITHUB_RAW_URL" 2>/dev/null | grep -m1 '^VERSION=' | cut -d'"' -f2)
+
+    if [[ -z "$remote_version" ]]; then
+        return 1
+    fi
+
+    LATEST_VERSION="$remote_version"
+
+    # Compare versions (simple string comparison works for semver)
+    if [[ "$remote_version" != "$VERSION" ]]; then
+        # Check if remote is newer (compare major.minor.patch)
+        local IFS='.'
+        read -ra local_parts <<< "$VERSION"
+        read -ra remote_parts <<< "$remote_version"
+
+        for i in 0 1 2; do
+            local lp=${local_parts[$i]:-0}
+            local rp=${remote_parts[$i]:-0}
+            if (( rp > lp )); then
+                UPDATE_AVAILABLE=1
+                return 0
+            elif (( rp < lp )); then
+                return 0
+            fi
+        done
+    fi
+
+    return 0
+}
+
+show_update_banner() {
+    if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
+        echo ""
+        echo -e "  ${T_WARN}⚡ Update available!${RST} ${T_DIM}v${VERSION} → v${LATEST_VERSION}${RST}"
+        echo -e "  ${T_DIM}Run option 'u' from the menu to update${RST}"
+    fi
+}
+
+run_update() {
+    echo ""
+    echo -e "${T_SECONDARY}${BOLD}Updating MBCore Dashboard...${RST}"
+    echo ""
+
+    # Check if we're in a git repo
+    if [[ ! -d "$MBTC_DIR/.git" ]]; then
+        msg_err "Not a git repository. Please update manually:"
+        echo ""
+        echo -e "  ${T_DIM}cd $MBTC_DIR${RST}"
+        echo -e "  ${T_DIM}git pull origin main${RST}"
+        echo ""
+        echo -en "${T_DIM}Press Enter to continue...${RST}"
+        read -r
+        return 1
+    fi
+
+    # Check for uncommitted changes
+    cd "$MBTC_DIR" || return 1
+
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        msg_warn "You have uncommitted changes. Stashing them..."
+        git stash
+    fi
+
+    # Pull the latest changes
+    echo -e "${T_INFO}Pulling latest changes from GitHub...${RST}"
+    if git pull origin main; then
+        msg_ok "Update successful!"
+        echo ""
+        msg_info "Please restart the dashboard to use the new version."
+        echo ""
+        echo -en "${T_DIM}Press Enter to exit...${RST}"
+        read -r
+        exit 0
+    else
+        msg_err "Update failed. Please try manually:"
+        echo ""
+        echo -e "  ${T_DIM}cd $MBTC_DIR${RST}"
+        echo -e "  ${T_DIM}git pull origin main${RST}"
+        echo ""
+        echo -en "${T_DIM}Press Enter to continue...${RST}"
+        read -r
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
 main() {
     show_banner
+
+    # Check for updates in the background (non-blocking)
+    check_for_updates &
+    local update_pid=$!
 
     # Check prerequisites
     if ! run_prereq_check; then
@@ -425,9 +533,13 @@ main() {
         esac
     fi
 
+    # Wait for update check to complete (with timeout)
+    wait "$update_pid" 2>/dev/null || true
+
     # Main loop
     while true; do
         show_banner
+        show_update_banner
         show_status
         show_menu
 
@@ -452,6 +564,14 @@ main() {
                 ;;
             t|T)
                 run_peer_list
+                ;;
+            u|U)
+                if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
+                    run_update
+                else
+                    msg_info "Already running the latest version (v${VERSION})"
+                    sleep 1
+                fi
                 ;;
             q|Q)
                 echo ""
