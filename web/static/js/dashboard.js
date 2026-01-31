@@ -4,7 +4,8 @@
  */
 
 // Configuration
-const REFRESH_INTERVAL = 10000; // 10 seconds
+let refreshInterval = 10000; // 10 seconds default (can be changed by user)
+const REFRESH_PRESETS = [5, 10, 15, 30, 60]; // seconds
 const API_BASE = '';
 
 // Antarctica coords for private AND unavailable locations
@@ -88,6 +89,7 @@ const changesTbody = document.getElementById('changes-tbody');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadColumnPreferences();  // Load saved order/visibility first
+    setupRefreshRateControl(); // Load refresh rate preference early
     // Don't load saved column widths on startup - let fitColumnsToWindow handle it after data loads
     // This ensures columns always fit the window properly on page load
     // But DO set initial changes table widths (it's a small fixed table)
@@ -100,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNetworkFilter();
     setupRestoreDefaults();
     setupPanelResize();
+    setupPeerRowClick();
     initMap();
     fetchPeers();
     fetchStats();
@@ -122,6 +125,35 @@ function setupNetworkFilter() {
                 renderPeers();
             }
         });
+    });
+}
+
+// Setup peer row click to show map popup
+function setupPeerRowClick() {
+    const tbody = document.getElementById('peer-tbody');
+    if (!tbody) return;
+
+    tbody.addEventListener('click', (e) => {
+        const row = e.target.closest('tr[data-id]');
+        if (!row) return;
+
+        const peerId = parseInt(row.dataset.id, 10);
+        if (isNaN(peerId)) return;
+
+        // Find the marker for this peer
+        const marker = markers[peerId];
+        if (marker && map) {
+            // Get marker position and pan map to it
+            const pos = marker.getLatLng();
+            map.setView(pos, Math.max(map.getZoom(), 3), { animate: true });
+
+            // Open the popup
+            marker.openPopup();
+
+            // Highlight the row briefly
+            row.classList.add('row-selected');
+            setTimeout(() => row.classList.remove('row-selected'), 1500);
+        }
     });
 }
 
@@ -547,6 +579,57 @@ const ANTARCTICA_CLUSTERS = {
     'unavailable': { lat: -85, lon: 150 } // Ross Ice Shelf area
 };
 
+// Cache for stable Antarctica positions (keyed by peer addr)
+// This ensures dots don't move around during a connection
+const antarcticaPositionCache = {};
+
+// Simple string hash function for stable pseudo-random positioning
+function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash;
+}
+
+// Get stable Antarctica position for a peer (cached per addr)
+function getStableAntarcticaPosition(peerAddr, network, locationType) {
+    // Use addr as key to ensure same peer always gets same position
+    const cacheKey = peerAddr || `unknown-${Date.now()}`;
+
+    if (antarcticaPositionCache[cacheKey]) {
+        return antarcticaPositionCache[cacheKey];
+    }
+
+    // Determine which cluster to use
+    const clusterType = locationType === 'unavailable' ? 'unavailable' : network;
+    const cluster = ANTARCTICA_CLUSTERS[clusterType] || ANTARCTICA_CLUSTERS['onion'];
+
+    // Generate stable offsets using hash of addr
+    const hash1 = hashString(cacheKey);
+    const hash2 = hashString(cacheKey + '_lon');
+
+    // Convert hash to value between -0.5 and 0.5
+    const latOffset = ((hash1 % 1000) / 1000) - 0.5;
+    const lonOffset = ((hash2 % 1000) / 1000) - 0.5;
+
+    // Apply offsets based on location type
+    let lat, lon;
+    if (locationType === 'unavailable') {
+        lat = cluster.lat + latOffset * 3;   // ±1.5 degrees
+        lon = cluster.lon + lonOffset * 15;  // ±7.5 degrees
+    } else {
+        lat = cluster.lat + latOffset * 4;   // ±2 degrees
+        lon = cluster.lon + lonOffset * 20;  // ±10 degrees
+    }
+
+    // Cache the position
+    antarcticaPositionCache[cacheKey] = { lat, lon };
+    return { lat, lon };
+}
+
 // Network colors (matching CSS)
 const NETWORK_COLORS = {
     'ipv4':  '#d29922', // yellow
@@ -570,14 +653,16 @@ function updateMap() {
 
         if (peer.location_status === 'private') {
             // Private locations: cluster by network type in Antarctica
-            const cluster = ANTARCTICA_CLUSTERS[network] || ANTARCTICA_CLUSTERS['onion'];
-            lat = cluster.lat + (Math.random() - 0.5) * 4;
-            lon = cluster.lon + (Math.random() - 0.5) * 20;
+            // Use stable positions so dots don't move during a connection
+            const pos = getStableAntarcticaPosition(peer.addr, network, 'private');
+            lat = pos.lat;
+            lon = pos.lon;
         } else if (peer.location_status === 'unavailable') {
             // Unavailable locations: separate area in Antarctica
-            const cluster = ANTARCTICA_CLUSTERS['unavailable'];
-            lat = cluster.lat + (Math.random() - 0.5) * 3;
-            lon = cluster.lon + (Math.random() - 0.5) * 15;
+            // Use stable positions so dots don't move during a connection
+            const pos = getStableAntarcticaPosition(peer.addr, network, 'unavailable');
+            lat = pos.lat;
+            lon = pos.lon;
         } else if (peer.lat && peer.lon) {
             lat = peer.lat;
             lon = peer.lon;
@@ -1364,13 +1449,13 @@ function truncate(str, maxLen) {
 
 // Countdown timer
 function startCountdown() {
-    countdown = REFRESH_INTERVAL / 1000;
+    countdown = refreshInterval / 1000;
     updateCountdownDisplay();
 
     refreshTimer = setInterval(() => {
         countdown--;
         if (countdown <= 0) {
-            countdown = REFRESH_INTERVAL / 1000;
+            countdown = refreshInterval / 1000;
         }
         updateCountdownDisplay();
         updateLocalTime();
@@ -1381,8 +1466,65 @@ function startCountdown() {
 }
 
 function resetCountdown() {
-    countdown = REFRESH_INTERVAL / 1000;
+    countdown = refreshInterval / 1000;
     updateCountdownDisplay();
+}
+
+// Setup refresh rate control
+function setupRefreshRateControl() {
+    // Load saved preference
+    try {
+        const saved = localStorage.getItem('mbcore_refresh_interval');
+        if (saved) {
+            const interval = parseInt(saved, 10);
+            if (REFRESH_PRESETS.includes(interval / 1000)) {
+                refreshInterval = interval;
+            }
+        }
+    } catch (e) {}
+
+    const container = document.getElementById('refresh-rate-control');
+    if (!container) return;
+
+    // Update display
+    updateRefreshRateDisplay();
+
+    // Handle clicks on preset buttons
+    container.querySelectorAll('.refresh-rate-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const seconds = parseInt(btn.dataset.seconds, 10);
+            if (!isNaN(seconds) && REFRESH_PRESETS.includes(seconds)) {
+                refreshInterval = seconds * 1000;
+
+                // Update active button
+                container.querySelectorAll('.refresh-rate-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Save preference
+                try {
+                    localStorage.setItem('mbcore_refresh_interval', refreshInterval.toString());
+                } catch (e) {}
+
+                // Reset countdown to new interval
+                resetCountdown();
+            }
+        });
+    });
+}
+
+function updateRefreshRateDisplay() {
+    const container = document.getElementById('refresh-rate-control');
+    if (!container) return;
+
+    const currentSeconds = refreshInterval / 1000;
+    container.querySelectorAll('.refresh-rate-btn').forEach(btn => {
+        const seconds = parseInt(btn.dataset.seconds, 10);
+        if (seconds === currentSeconds) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
 }
 
 function updateCountdownDisplay() {

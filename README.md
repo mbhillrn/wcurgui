@@ -18,6 +18,8 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 - **Connection History** - Track recently connected and disconnected peers
 - **Web Dashboard** - Clean, responsive interface accessible from any device on your network
 - **Smart Caching** - Geo-location data is cached in a local SQLite database to minimize API calls
+- **Configurable Refresh Rate** - Choose your preferred update frequency (5s, 10s, 15s, 30s, or 60s)
+- **Interactive Peer Selection** - Click any peer row to highlight it on the map
 
 ## Quick Start
 
@@ -125,6 +127,18 @@ Additional options:
 - **d) Rerun Detection** - Re-detect Bitcoin Core settings
 - **m) Manual Settings** - Manually enter Bitcoin Core paths
 - **t) Terminal View** - Basic terminal-based peer list (limited features)
+
+## Usage Tips
+
+### Refresh Rate
+
+The map update frequency can be adjusted using the buttons in the map panel header. Available options are 5s, 10s, 15s, 30s, and 60s. Your preference is saved automatically.
+
+**Recommendation:** On a decently powered machine, a 10-second refresh rate provides a good balance between responsiveness and resource usage. Lower-powered systems may prefer 15s or 30s.
+
+### Peer Selection
+
+Click any row in the peer table to highlight that peer on the map. The map will pan to show the peer's location (or Antarctica cluster for private networks) and display its information popup.
 
 ## Project Structure
 

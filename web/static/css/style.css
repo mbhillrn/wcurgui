@@ -568,8 +568,8 @@ th[data-col="direction"] {
 }
 
 /* Location styling */
+/* Private locations inherit network color (onion=red, i2p=blue, cjdns=pink) */
 .location-private {
-    color: var(--accent-yellow);
     font-style: italic;
 }
 
@@ -664,6 +664,46 @@ th[data-col="direction"] {
 .dot-i2p { background: var(--net-i2p); }
 .dot-cjdns { background: var(--net-cjdns); }
 .dot-unavailable { background: var(--text-dim); }
+
+/* Refresh rate control */
+.refresh-rate-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    margin-left: 12px;
+}
+
+.refresh-rate-label {
+    color: var(--text-dim);
+    margin-right: 2px;
+}
+
+.refresh-rate-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 2px 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.refresh-rate-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.refresh-rate-btn.active {
+    background: rgba(88, 166, 255, 0.2);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
 
 /* Map status indicator */
 .map-status {
@@ -901,4 +941,14 @@ th[data-col="direction"] {
 /* Tooltips already handled by title attribute, but add custom styling if needed */
 [title] {
     cursor: help;
+}
+
+/* Row selected animation when clicking to show on map */
+.peer-table tr.row-selected {
+    animation: row-highlight 1.5s ease-out;
+}
+
+@keyframes row-highlight {
+    0% { background: rgba(88, 166, 255, 0.4) !important; }
+    100% { background: transparent; }
 }

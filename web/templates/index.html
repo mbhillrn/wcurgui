@@ -76,6 +76,14 @@
         <div class="panel map-panel-full resizable-panel" id="map-panel">
             <div class="panel-header">
                 <h2>Peer Map</h2>
+                <span class="refresh-rate-control" id="refresh-rate-control" title="Map update frequency (seconds)">
+                    <span class="refresh-rate-label">Refresh:</span>
+                    <button class="refresh-rate-btn" data-seconds="5">5s</button>
+                    <button class="refresh-rate-btn active" data-seconds="10">10s</button>
+                    <button class="refresh-rate-btn" data-seconds="15">15s</button>
+                    <button class="refresh-rate-btn" data-seconds="30">30s</button>
+                    <button class="refresh-rate-btn" data-seconds="60">60s</button>
+                </span>
                 <span class="map-status" id="map-status">
                     <span class="status-dot status-ok" id="map-status-dot"></span>
                     <span id="map-status-text">Updated!</span>
@@ -214,7 +222,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <span>MBCore Dashboard v2.0.0 | created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
+            <span>MBCore Dashboard v2.1.0 | created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
             <span id="refresh-timer">Refreshing in 10s</span>
         </footer>
     </div>
