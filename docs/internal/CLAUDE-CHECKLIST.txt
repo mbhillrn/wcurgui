@@ -28,13 +28,26 @@ STARTUP UI CLEANUP:
   [x] Updated Bitcoin Core tools check message: "Package successfully checked"
 
 MAIN MENU REORGANIZATION:
-  [x] 1) Enter MBCore Web Dashboard - primary option with description
+  [x] 1) Enter MBCore Web Dashboard - primary option with description on separate lines
+  [x] 2) Reset Config - with description on separate line
+  [x] 3) Reset Database - with description on separate line
   [x] d) Rerun Detection - re-detect Bitcoin Core settings
   [x] m) Manual Settings - manually enter Bitcoin Core settings
-  [x] 2) Reset Config - clear saved configuration
-  [x] 3) Reset Database - clear peer geo-location cache
   [x] t) Terminal View - limited terminal peer list (moved to bottom)
   [x] Removed "Blockchain Info" and "Mempool Stats" placeholder items
+
+MANUAL CONFIGURATION IMPROVEMENTS:
+  [x] Show "(enter * to go back to detection)" instruction
+  [x] Show detected path as example that can be submitted with just Enter
+  [x] Same default/example logic for datadir input
+  [x] Changed "Auto-detecting..." to bold secondary color (no info icon)
+
+README UPDATES:
+  [x] Emphasized "No accounts, registrations, or sign-ups required" near top
+  [x] Listed all dependencies with purposes in tables
+  [x] Noted dependencies are auto-detected and offered for installation
+  [x] Added sections on detection process, geo-location, database
+  [x] Changed author to just "mbhillrn"
 
 CURRENT STATUS DISPLAY:
   [x] Removed big blue box around current configuration section

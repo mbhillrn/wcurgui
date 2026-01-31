@@ -124,14 +124,15 @@ show_menu() {
     echo -e "${T_SECONDARY}${BOLD}Main Menu${RST}"
     echo ""
     echo -e "  ${T_INFO}1)${RST} Enter MBCore Web Dashboard"
-    echo -e "     ${T_DIM}Bitcoin Core peer info/map/tools${RST}"
-    echo -e "     ${T_DIM}Instructions on access viewable on the next page!${RST}"
+    echo -e "     ${T_DIM}- Bitcoin Core peer info/map/tools${RST}"
+    echo -e "     ${T_DIM}- Instructions on access viewable on the next page!${RST}"
+    echo -e "  ${T_INFO}2)${RST} Reset Config"
+    echo -e "     ${T_DIM}- Clear saved configuration${RST}"
+    echo -e "  ${T_INFO}3)${RST} Reset Database"
+    echo -e "     ${T_DIM}- Clear peer geo-location cache${RST}"
     echo ""
     echo -e "  ${T_WARN}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
     echo -e "  ${T_WARN}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
-    echo -e "  ${T_WARN}2)${RST} Reset Config       ${T_DIM}- Clear saved configuration${RST}"
-    echo -e "  ${T_WARN}3)${RST} Reset Database     ${T_DIM}- Clear peer geo-location cache${RST}"
-    echo ""
     echo -e "  ${T_DIM}t)${RST} Terminal View      ${T_DIM}- Very limited terminal peer list${RST}"
     echo ""
     echo -e "  ${T_ERROR}q)${RST} Quit"
@@ -200,21 +201,45 @@ run_manual_config() {
     echo ""
     echo -e "${T_DIM}Enter the paths to your Bitcoin Core configuration.${RST}"
     echo -e "${T_DIM}(After entering these, the rest will be auto-detected)${RST}"
+    echo -e "${T_DIM}(You may enter * to go back to detection, or just press Enter to use the example path)${RST}"
     echo ""
+
+    # Try to detect a default conf path
+    local default_conf=""
+    if [[ -f "/srv/bitcoin/bitcoin.conf" ]]; then
+        default_conf="/srv/bitcoin/bitcoin.conf"
+    elif [[ -f "$HOME/.bitcoin/bitcoin.conf" ]]; then
+        default_conf="$HOME/.bitcoin/bitcoin.conf"
+    elif [[ -f "/etc/bitcoin/bitcoin.conf" ]]; then
+        default_conf="/etc/bitcoin/bitcoin.conf"
+    fi
 
     # Ask for bitcoin.conf path
     local conf_path=""
     while true; do
-        echo -en "${T_INFO}Path to bitcoin.conf${RST} ${T_DIM}(or 'b' to go back):${RST} "
+        if [[ -n "$default_conf" ]]; then
+            echo -en "${T_INFO}Location of bitcoin.conf${RST} ${T_DIM}(ex: ${default_conf}):${RST} "
+        else
+            echo -en "${T_INFO}Location of bitcoin.conf:${RST} "
+        fi
         read -r conf_path
 
-        if [[ "$conf_path" == "b" || "$conf_path" == "B" ]]; then
+        # Handle * to go back
+        if [[ "$conf_path" == "*" ]]; then
+            run_detection
             return
+        fi
+
+        # Use default if just Enter pressed
+        if [[ -z "$conf_path" && -n "$default_conf" ]]; then
+            conf_path="$default_conf"
         fi
 
         conf_path="${conf_path/#\~/$HOME}"
 
-        if [[ -f "$conf_path" ]]; then
+        if [[ -z "$conf_path" ]]; then
+            msg_err "Please enter a path"
+        elif [[ -f "$conf_path" ]]; then
             msg_ok "Found: $conf_path"
             break
         else
@@ -237,12 +262,22 @@ run_manual_config() {
 
     if [[ -z "$datadir" ]]; then
         echo ""
+        # Use conf_dir as the example/default
+        local default_datadir="$conf_dir"
+
         while true; do
-            echo -en "${T_INFO}Path to data directory${RST} ${T_DIM}(or 'b' to go back):${RST} "
+            echo -en "${T_INFO}Location of Bitcoin Core data directory${RST} ${T_DIM}(ex: ${default_datadir}):${RST} "
             read -r datadir
 
-            if [[ "$datadir" == "b" || "$datadir" == "B" ]]; then
+            # Handle * to go back
+            if [[ "$datadir" == "*" ]]; then
+                run_detection
                 return
+            fi
+
+            # Use default if just Enter pressed
+            if [[ -z "$datadir" ]]; then
+                datadir="$default_datadir"
             fi
 
             datadir="${datadir/#\~/$HOME}"
@@ -262,7 +297,7 @@ run_manual_config() {
 
     # Now run detection to fill in the rest (CLI, network, auth, etc.)
     echo ""
-    msg_info "Auto-detecting remaining settings..."
+    echo -e "${T_SECONDARY}${BOLD}Auto-detecting remaining settings...${RST}"
 
     # Source detection script functions
     source "$MBTC_DIR/scripts/detect.sh"
