@@ -1,12 +1,59 @@
 ================================================================================
-CLAUDE LOOK HERE - MBTC-DASH Development Checklist
+CLAUDE LOOK HERE - MBCore Dashboard Development Checklist
 ================================================================================
 
 Last Updated: 2026-01-31
-Current Version: 1.1.0
+Current Version: 2.0.0
 
 ================================================================================
-** VERSION 1.1.0 CHANGES (IN PROGRESS) **
+** VERSION 2.0.0 CHANGES (COMPLETED) **
+================================================================================
+
+PROJECT REORGANIZATION:
+  [x] Moved PROJECT_PROGRESS.md, PROJ-Plan, CLAUDE-CHECKLIST.txt to docs/internal/
+  [x] Moved PREREQS.md to docs/
+  [x] Created proper README.md with project overview
+  [x] Updated version to 2.0.0 in da.sh, web/server.py, web/templates/index.html
+
+STARTUP UI CLEANUP:
+  [x] Removed big blue box headers from prerequisites check
+  [x] Removed big blue box headers from detection steps
+  [x] Changed "These are the settings I found:" to "Found Settings:"
+  [x] Changed "Does this look correct?" to "Choose an option:"
+  [x] Changed "Yes, save these settings" to "Use the detected settings, and continue to the main menu"
+  [x] Changed "No, enter settings manually" to "I would like to manually enter my Bitcoin Core settings"
+  [x] Fixed input validation - invalid input no longer saves config
+  [x] Manual settings entry now directly enters config flow instead of booting out
+  [x] Updated python check message: "Package is the right size and inside the virtual environment"
+  [x] Updated Bitcoin Core tools check message: "Package successfully checked"
+
+MAIN MENU REORGANIZATION:
+  [x] 1) Enter MBCore Web Dashboard - primary option with description on separate lines
+  [x] 2) Reset Config - with description on separate line
+  [x] 3) Reset Database - with description on separate line
+  [x] d) Rerun Detection - re-detect Bitcoin Core settings
+  [x] m) Manual Settings - manually enter Bitcoin Core settings
+  [x] t) Terminal View - limited terminal peer list (moved to bottom)
+  [x] Removed "Blockchain Info" and "Mempool Stats" placeholder items
+
+MANUAL CONFIGURATION IMPROVEMENTS:
+  [x] Show "(enter * to go back to detection)" instruction
+  [x] Show detected path as example that can be submitted with just Enter
+  [x] Same default/example logic for datadir input
+  [x] Changed "Auto-detecting..." to bold secondary color (no info icon)
+
+README UPDATES:
+  [x] Emphasized "No accounts, registrations, or sign-ups required" near top
+  [x] Listed all dependencies with purposes in tables
+  [x] Noted dependencies are auto-detected and offered for installation
+  [x] Added sections on detection process, geo-location, database
+  [x] Changed author to just "mbhillrn"
+
+CURRENT STATUS DISPLAY:
+  [x] Removed big blue box around current configuration section
+
+================================================================================
+** VERSION 1.1.0 CHANGES (COMPLETED) **
 ================================================================================
 
 MEMORY/PERFORMANCE FIXES:

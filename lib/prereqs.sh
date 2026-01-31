@@ -257,7 +257,9 @@ run_prereq_check() {
     local pkg_mgr
     pkg_mgr=$(detect_pkg_manager)
 
-    print_section "Prerequisites Check"
+    echo ""
+    echo -e "${T_SECONDARY}${BOLD}System Prerequisites${RST}"
+    echo ""
 
     check_all_prereqs
 
@@ -301,7 +303,6 @@ run_prereq_check() {
 
             if [[ $all_installed -eq 0 ]]; then
                 msg_err "Some required tools could not be installed"
-                print_section_end
                 return 1
             fi
         else
@@ -315,35 +316,43 @@ run_prereq_check() {
 
                 if [[ $all_installed -eq 0 ]]; then
                     msg_err "Some required tools could not be installed"
-                    print_section_end
                     return 1
                 fi
             else
                 msg_err "Cannot continue without required tools"
-                print_section_end
                 return 1
             fi
         fi
     fi
 
-    # Check for Bitcoin tools (informational only at this stage)
+    # Check for Bitcoin Core tools
     echo ""
-    echo -e "${T_DIM}Bitcoin Core tools:${RST}"
+    echo -e "${T_DIM}Checking your Bitcoin Core tool package...${RST}"
+    local btc_found=1
     for entry in "${BITCOIN_TOOLS[@]}"; do
         IFS='|' read -r cmd desc <<< "$entry"
-        if cmd_exists "$cmd"; then
-            local version
-            version=$($cmd --version 2>/dev/null | head -1 || echo "unknown version")
-            msg_ok "${cmd} ${T_DIM}(${version})${RST}"
-        else
-            msg_warn "${cmd} ${T_DIM}(not in PATH - will search)${RST}"
+        if ! cmd_exists "$cmd"; then
+            btc_found=0
+            break
         fi
     done
+
+    if [[ $btc_found -eq 1 ]]; then
+        msg_ok "Package successfully checked"
+        for entry in "${BITCOIN_TOOLS[@]}"; do
+            IFS='|' read -r cmd desc <<< "$entry"
+            local version
+            version=$($cmd --version 2>/dev/null | head -1 | grep -oP 'v[\d.]+' || echo "unknown")
+            msg_bullet "${cmd} ${T_DIM}(${desc} ${version})${RST}"
+        done
+    else
+        msg_warn "Bitcoin Core tools not in PATH - will search during detection"
+    fi
 
     # Check Python packages using venv
     run_python_check
 
-    print_section_end
+    echo ""
     return 0
 }
 
@@ -417,16 +426,17 @@ run_python_check() {
 
     # If nothing missing, we're good - show success message
     if [[ $need_terminal -eq 0 && $need_web -eq 0 ]]; then
-        msg_ok "Nice package, it slipped right into the virtual environment"
+        msg_ok "Package is the right size and inside the virtual environment"
         for item in "${present_terminal[@]}"; do
             IFS='|' read -r pkg desc <<< "$item"
             msg_bullet "${pkg} ${T_DIM}(${desc})${RST}"
         done
         echo ""
         echo -e "${T_DIM}Checking dashboard site necessities...${RST}"
+        msg_ok "All web packages installed"
         for item in "${present_web[@]}"; do
             IFS='|' read -r pkg desc <<< "$item"
-            msg_ok "${pkg} ${T_DIM}(${desc})${RST}"
+            msg_bullet "${pkg} ${T_DIM}(${desc})${RST}"
         done
         PYTHON_MODE="full"
         return 0

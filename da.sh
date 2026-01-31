@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="1.1.0"
+VERSION="2.0.0"
 
 # Venv paths
 VENV_DIR="$MBTC_DIR/venv"
@@ -71,7 +71,7 @@ EOF
     echo -e "${RST}"
     echo -e "  ${T_WHITE}Dashboard${RST}  ${T_DIM}v${VERSION}${RST} ${T_WHITE}(Bitcoin Core peer info/map/tools)${RST}"
     echo -e "  ────────────────────────────────────────────────────"
-    echo -e "  ${T_DIM}Created by mbhillrn with Claude's help${RST}"
+    echo -e "  ${T_DIM}Created by mbhillrn${RST}"
     echo -e "  ${T_DIM}MIT License - Free to use, modify, and distribute${RST}"
     echo -e "  ${T_DIM}Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5${RST}"
     echo ""
@@ -83,7 +83,8 @@ EOF
 
 show_status() {
     echo ""
-    print_section "Current Configuration"
+    echo -e "${T_SECONDARY}${BOLD}Current Configuration${RST}"
+    echo ""
 
     if [[ "$MBTC_CONFIGURED" -eq 1 ]]; then
         print_kv "Bitcoin CLI" "${MBTC_CLI_PATH:-not set}" 16
@@ -111,8 +112,7 @@ show_status() {
     else
         msg_warn "Not configured - run detection first"
     fi
-
-    print_section_end
+    echo ""
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -123,13 +123,17 @@ show_menu() {
     echo ""
     echo -e "${T_SECONDARY}${BOLD}Main Menu${RST}"
     echo ""
-    echo -e "  ${T_INFO}1)${RST} Peer List          ${T_DIM}- View connected peers with geo-location (terminal)${RST}"
-    echo -e "  ${T_INFO}2)${RST} Web Dashboard      ${T_DIM}- Launch local web dashboard${RST}"
-    echo -e "  ${T_INFO}3)${RST} Blockchain Info    ${T_DIM}- View chain status (coming soon)${RST}"
-    echo -e "  ${T_INFO}4)${RST} Mempool Stats      ${T_DIM}- View mempool data (coming soon)${RST}"
+    echo -e "  ${T_INFO}1)${RST} Enter MBCore Web Dashboard"
+    echo -e "     ${T_DIM}- Bitcoin Core peer info/map/tools${RST}"
+    echo -e "     ${T_DIM}- Instructions on access viewable on the next page!${RST}"
+    echo -e "  ${T_INFO}2)${RST} Reset MBCore Config"
+    echo -e "     ${T_DIM}- Clear saved configuration${RST}"
+    echo -e "  ${T_INFO}3)${RST} Reset MBCore Database"
+    echo -e "     ${T_DIM}- Clear peer geo-location cache${RST}"
     echo ""
-    echo -e "  ${T_WARN}d)${RST} Run Detection      ${T_DIM}- Detect/configure Bitcoin Core${RST}"
-    echo -e "  ${T_WARN}r)${RST} Reset Config       ${T_DIM}- Clear saved configuration${RST}"
+    echo -e "  ${T_WARN}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
+    echo -e "  ${T_WARN}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
+    echo -e "  ${T_DIM}t)${RST} Terminal View      ${T_DIM}- Very limited terminal peer list${RST}"
     echo ""
     echo -e "  ${T_ERROR}q)${RST} Quit"
     echo ""
@@ -191,26 +195,51 @@ run_detection() {
 run_manual_config() {
     clear
     show_banner
-    print_header "Manual Configuration"
 
     echo ""
-    echo -e "${T_SECONDARY}Enter the paths to your Bitcoin Core configuration.${RST}"
-    echo -e "${T_DIM}(After entering these, the rest will be auto-detected)${RST}"
+    echo -e "${T_SECONDARY}${BOLD}Manual Configuration${RST}"
     echo ""
+    echo -e "${T_DIM}Enter the paths to your Bitcoin Core configuration.${RST}"
+    echo -e "${T_DIM}(After entering these, the rest will be auto-detected)${RST}"
+    echo -e "${T_DIM}(You may enter * to go back to detection, or just press Enter to use the example path)${RST}"
+    echo ""
+
+    # Try to detect a default conf path
+    local default_conf=""
+    if [[ -f "/srv/bitcoin/bitcoin.conf" ]]; then
+        default_conf="/srv/bitcoin/bitcoin.conf"
+    elif [[ -f "$HOME/.bitcoin/bitcoin.conf" ]]; then
+        default_conf="$HOME/.bitcoin/bitcoin.conf"
+    elif [[ -f "/etc/bitcoin/bitcoin.conf" ]]; then
+        default_conf="/etc/bitcoin/bitcoin.conf"
+    fi
 
     # Ask for bitcoin.conf path
     local conf_path=""
     while true; do
-        echo -en "${T_INFO}Path to bitcoin.conf${RST} ${T_DIM}(or 'b' to go back):${RST} "
+        if [[ -n "$default_conf" ]]; then
+            echo -en "${T_INFO}Location of bitcoin.conf${RST} ${T_DIM}(ex: ${default_conf}):${RST} "
+        else
+            echo -en "${T_INFO}Location of bitcoin.conf:${RST} "
+        fi
         read -r conf_path
 
-        if [[ "$conf_path" == "b" || "$conf_path" == "B" ]]; then
+        # Handle * to go back
+        if [[ "$conf_path" == "*" ]]; then
+            run_detection
             return
+        fi
+
+        # Use default if just Enter pressed
+        if [[ -z "$conf_path" && -n "$default_conf" ]]; then
+            conf_path="$default_conf"
         fi
 
         conf_path="${conf_path/#\~/$HOME}"
 
-        if [[ -f "$conf_path" ]]; then
+        if [[ -z "$conf_path" ]]; then
+            msg_err "Please enter a path"
+        elif [[ -f "$conf_path" ]]; then
             msg_ok "Found: $conf_path"
             break
         else
@@ -233,12 +262,22 @@ run_manual_config() {
 
     if [[ -z "$datadir" ]]; then
         echo ""
+        # Use conf_dir as the example/default
+        local default_datadir="$conf_dir"
+
         while true; do
-            echo -en "${T_INFO}Path to data directory${RST} ${T_DIM}(or 'b' to go back):${RST} "
+            echo -en "${T_INFO}Location of Bitcoin Core data directory${RST} ${T_DIM}(ex: ${default_datadir}):${RST} "
             read -r datadir
 
-            if [[ "$datadir" == "b" || "$datadir" == "B" ]]; then
+            # Handle * to go back
+            if [[ "$datadir" == "*" ]]; then
+                run_detection
                 return
+            fi
+
+            # Use default if just Enter pressed
+            if [[ -z "$datadir" ]]; then
+                datadir="$default_datadir"
             fi
 
             datadir="${datadir/#\~/$HOME}"
@@ -258,7 +297,7 @@ run_manual_config() {
 
     # Now run detection to fill in the rest (CLI, network, auth, etc.)
     echo ""
-    msg_info "Auto-detecting remaining settings..."
+    echo -e "${T_SECONDARY}${BOLD}Auto-detecting remaining settings...${RST}"
 
     # Source detection script functions
     source "$MBTC_DIR/scripts/detect.sh"
@@ -303,6 +342,24 @@ reset_config() {
         msg_ok "Configuration cleared"
     else
         msg_info "Cancelled"
+    fi
+    echo ""
+    echo -en "${T_DIM}Press Enter to continue...${RST}"
+    read -r
+}
+
+reset_database() {
+    echo ""
+    local db_path="$MBTC_DIR/data/peers.db"
+    if [[ -f "$db_path" ]]; then
+        if prompt_yn "Are you sure you want to clear the peer geo-location cache?"; then
+            rm -f "$db_path"
+            msg_ok "Database cleared"
+        else
+            msg_info "Cancelled"
+        fi
+    else
+        msg_info "No database found to clear"
     fi
     echo ""
     echo -en "${T_DIM}Press Enter to continue...${RST}"
@@ -379,28 +436,22 @@ main() {
 
         case "$choice" in
             1)
-                run_peer_list
-                ;;
-            2)
                 run_web_dashboard
-                ;;
-            3)
-                msg_info "Blockchain info coming soon..."
-                echo ""
-                echo -en "${T_DIM}Press Enter to continue...${RST}"
-                read -r
-                ;;
-            4)
-                msg_info "Mempool stats coming soon..."
-                echo ""
-                echo -en "${T_DIM}Press Enter to continue...${RST}"
-                read -r
                 ;;
             d|D)
                 run_detection
                 ;;
-            r|R)
+            m|M)
+                run_manual_config
+                ;;
+            2)
                 reset_config
+                ;;
+            3)
+                reset_database
+                ;;
+            t|T)
+                run_peer_list
                 ;;
             q|Q)
                 echo ""

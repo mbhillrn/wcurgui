@@ -128,7 +128,7 @@ msg_warn() {
 
 # Info message
 msg_info() {
-    echo -e "${T_INFO}${SYM_INFO}${RST} $*"
+    echo -e "${T_DIM}${SYM_ARROW}${RST} $*"
 }
 
 # Bullet point

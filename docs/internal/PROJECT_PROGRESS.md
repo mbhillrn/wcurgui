@@ -1,7 +1,7 @@
-# MBTC-DASH Project Progress
+# MBCore Dashboard - Project Progress
 
 ## Overview
-Bitcoin Core monitoring and management dashboard - terminal-based with Python Rich for smooth UI.
+Bitcoin Core monitoring dashboard with web-based peer map and real-time updates.
 
 ## Architecture
 
@@ -9,13 +9,19 @@ Bitcoin Core monitoring and management dashboard - terminal-based with Python Ri
 da.sh                    # Main entry - shows menu, orchestrates everything
 scripts/
   detect.sh              # Bitcoin Core detection (datadir, conf, RPC)
-  peerlist.py            # Peer list with Rich live tables
+  peerlist.py            # Terminal peer list with Rich live tables
 lib/
   colors.sh              # Color definitions and theme
   config.sh              # Shared config loading (MBTC_* variables)
   database.sh            # SQLite functions for peer caching
   prereqs.sh             # Prerequisites checking
   ui.sh                  # UI helpers (spinners, boxes, prompts)
+web/
+  server.py              # FastAPI web server with SSE
+  templates/index.html   # Web dashboard template
+  static/                # CSS and JavaScript
+data/                    # Config and database (created at runtime)
+docs/                    # Documentation
 ```
 
 ## Completed Features
@@ -64,8 +70,8 @@ lib/
 
 - **Shared Configuration** (`lib/config.sh`)
   - Single config file used by all scripts
-  - Config at `~/.config/mbtc-dash/config.conf`
-  - Database at `~/.local/share/mbtc-dash/peers.db`
+  - Config at `./data/config.conf`
+  - Database at `./data/peers.db`
   - Functions: load_config, save_config, get_cli_command, test_rpc
 
 - **Database Caching** (`lib/database.sh`)
@@ -128,14 +134,53 @@ lib/
   - Detection runs automatically with 1-second pause
   - Smoother first-run experience
 
+### v1.0.0 - Web Dashboard
+- **FastAPI Web Server** (`web/server.py`): Full web dashboard
+  - Leaflet.js map with peer locations
+  - Real-time updates via Server-Sent Events (SSE)
+  - Main peer table with sorting and filtering
+  - Recent changes table (20 second window)
+  - Network type filtering (IPv4, IPv6, Tor, I2P, CJDNS)
+  - Column drag-and-drop reordering
+  - Dynamic port selection (default 58333)
+  - Session-based authentication
+
+- **Python Virtual Environment**
+  - Dependencies installed to local `./venv/` folder
+  - Clean uninstall by deleting folder
+  - Terminal packages: rich, requests
+  - Web packages: fastapi, uvicorn, jinja2, sse-starlette
+
+### v1.1.0 - Performance and UI
+- Fixed peer_ip_map memory leak
+- Fixed slow shutdown with daemon threads
+- Added horizontal scrollbar for peer table
+- Network type row coloring
+- Column name improvements
+
+### v2.0.0 - Reorganization and UI Cleanup
+- **Project Reorganization**
+  - Moved internal docs to `docs/internal/`
+  - Created proper README.md
+  - Clean project structure
+
+- **Startup UI Improvements**
+  - Cleaner prerequisites display
+  - Streamlined Bitcoin Core detection output
+  - Improved settings confirmation flow
+  - Better input validation
+
+- **Menu Reorganization**
+  - Web Dashboard as primary option
+  - Manual settings entry from main menu
+  - Database reset option
+  - Terminal peer list moved to secondary position
+
 ## Planned Features
-- [ ] Peer map visualization (web-based)
 - [ ] Blockchain info display (height, difficulty, sync status)
 - [ ] Mempool statistics graphs
 - [ ] System metrics (CPU, RAM, disk)
-- [ ] Wallet balance + price conversion
-- [ ] Security checks for exposed ports
-- [ ] Web dashboard (replaces terminal menu once ready)
+- [ ] Database review and optimization
 
 ---
-*Last updated: v0.2.1 - Fixed peer list crash, two-panel layout, manual config, auth display*
+*Last updated: v2.0.0 - Project reorganization, UI cleanup, menu improvements*
