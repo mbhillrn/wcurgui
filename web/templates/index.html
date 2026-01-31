@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MBTC-DASH - Bitcoin Peer Dashboard</title>
+    <title>MBCore Dashboard - Peer info, map, and tools for Bitcoin Core</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -13,118 +13,190 @@
         <!-- Header -->
         <header class="header">
             <div class="header-title">
-                <pre class="logo">
-███╗   ███╗██████╗ ████████╗ ██████╗         ██████╗  █████╗ ███████╗██╗  ██╗
-████╗ ████║██╔══██╗╚══██╔══╝██╔════╝         ██╔══██╗██╔══██╗██╔════╝██║  ██║
-██╔████╔██║██████╔╝   ██║   ██║              ██║  ██║███████║███████╗███████║
-██║╚██╔╝██║██╔══██╗   ██║   ██║              ██║  ██║██╔══██║╚════██║██╔══██║
-██║ ╚═╝ ██║██████╔╝   ██║   ╚██████╗         ██████╔╝██║  ██║███████║██║  ██║
-╚═╝     ╚═╝╚═════╝    ╚═╝    ╚═════╝         ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-                </pre>
-                <span class="subtitle">Bitcoin Peer Dashboard</span>
+                <h1 class="logo-text">MBCore Dashboard</h1>
+                <span class="subtitle">Peer info, map, and tools for Bitcoin Core</span>
+                <span class="credits">Created by mbhillrn with Claude's help | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
             </div>
             <div class="header-info">
                 <span class="status-indicator" id="status-indicator"></span>
                 <span id="connection-status">Connecting...</span>
+                <div class="protocol-status" id="protocol-status">
+                    <div class="protocol-line">
+                        <span class="protocol-label">Enabled:</span>
+                        <span class="protocol-list" id="protocols-enabled">-</span>
+                    </div>
+                    <div class="protocol-line">
+                        <span class="protocol-label">Not Configured:</span>
+                        <span class="protocol-list" id="protocols-disabled">-</span>
+                    </div>
+                </div>
             </div>
         </header>
 
-        <!-- Stats Bar -->
+        <!-- Stats Bar - Redesigned -->
         <div class="stats-bar">
-            <div class="stat">
-                <span class="stat-label">Connected</span>
-                <span class="stat-value" id="stat-connected">-</span>
+            <div class="stat-block">
+                <span class="stat-title">Connected</span>
+                <span class="stat-data" id="stat-connected">-</span>
             </div>
-            <div class="stat stat-network" id="stat-ipv4-wrap" style="display: none;">
-                <span class="stat-label">IPv4</span>
-                <span class="stat-value" id="stat-ipv4">-</span>
+            <div class="stat-block stat-network" id="stat-ipv4-wrap" style="display: none;">
+                <span class="stat-title">IPv4 (in/out)</span>
+                <span class="stat-data stat-ipv4" id="stat-ipv4">-</span>
             </div>
-            <div class="stat stat-network" id="stat-ipv6-wrap" style="display: none;">
-                <span class="stat-label">IPv6</span>
-                <span class="stat-value" id="stat-ipv6">-</span>
+            <div class="stat-block stat-network" id="stat-ipv6-wrap" style="display: none;">
+                <span class="stat-title">IPv6 (in/out)</span>
+                <span class="stat-data stat-ipv6" id="stat-ipv6">-</span>
             </div>
-            <div class="stat stat-network" id="stat-onion-wrap" style="display: none;">
-                <span class="stat-label">Tor</span>
-                <span class="stat-value" id="stat-onion">-</span>
+            <div class="stat-block stat-network" id="stat-onion-wrap" style="display: none;">
+                <span class="stat-title">Tor (in/out)</span>
+                <span class="stat-data stat-onion" id="stat-onion">-</span>
             </div>
-            <div class="stat stat-network" id="stat-i2p-wrap" style="display: none;">
-                <span class="stat-label">I2P</span>
-                <span class="stat-value" id="stat-i2p">-</span>
+            <div class="stat-block stat-network" id="stat-i2p-wrap" style="display: none;">
+                <span class="stat-title">I2P (in/out)</span>
+                <span class="stat-data stat-i2p" id="stat-i2p">-</span>
             </div>
-            <div class="stat stat-network" id="stat-cjdns-wrap" style="display: none;">
-                <span class="stat-label">CJDNS</span>
-                <span class="stat-value" id="stat-cjdns">-</span>
+            <div class="stat-block stat-network" id="stat-cjdns-wrap" style="display: none;">
+                <span class="stat-title">CJDNS (in/out)</span>
+                <span class="stat-data stat-cjdns" id="stat-cjdns">-</span>
             </div>
-            <div class="stat stat-timer">
-                <span class="stat-label">Next Update</span>
-                <span class="stat-value" id="stat-countdown">10s</span>
+            <div class="stat-block stat-timer">
+                <span class="stat-title">Next Update</span>
+                <span class="stat-data" id="stat-countdown">10s</span>
             </div>
-            <div class="stat stat-time">
-                <span class="stat-label">Local Time</span>
-                <span class="stat-value" id="stat-localtime">--:--:--</span>
+            <div class="stat-block stat-time">
+                <span class="stat-title">Local Time</span>
+                <span class="stat-data" id="stat-localtime">--:--:--</span>
             </div>
         </div>
 
         <!-- Map Panel -->
-        <div class="panel map-panel-full">
+        <div class="panel map-panel-full resizable-panel" id="map-panel">
             <div class="panel-header">
                 <h2>Peer Map</h2>
+                <span class="map-status" id="map-status">
+                    <span class="status-dot status-ok" id="map-status-dot"></span>
+                    <span id="map-status-text">Updated!</span>
+                </span>
                 <span class="map-legend">
-                    <span class="legend-item"><span class="dot dot-public"></span> Public</span>
-                    <span class="legend-item"><span class="dot dot-private"></span> Private</span>
-                    <span class="legend-item"><span class="dot dot-unavailable"></span> Unavailable</span>
+                    <span class="legend-group" title="Public networks with geo location">
+                        <span class="legend-label">Public:</span>
+                        <span class="dot dot-ipv4" title="IPv4"></span>
+                        <span class="dot dot-ipv6" title="IPv6"></span>
+                    </span>
+                    <span class="legend-group" title="Private networks clustered in Antarctica">
+                        <span class="legend-label">Private (In Antarctica 🐧):</span>
+                        <span class="dot dot-onion" title="Tor/Onion"></span>
+                        <span class="dot dot-i2p" title="I2P"></span>
+                        <span class="dot dot-cjdns" title="CJDNS"></span>
+                        <span class="dot dot-unavailable" title="Unavailable"></span>
+                    </span>
                 </span>
             </div>
             <div class="map-container" id="map"></div>
+            <div class="resize-handle" data-panel="map-panel"></div>
         </div>
 
-        <!-- Main Peer Table -->
-        <div class="panel peer-panel">
+        <!-- Main Peer Table - 23 COLUMNS -->
+        <div class="panel peer-panel resizable-panel" id="peer-panel">
             <div class="panel-header">
-                <h2>Connected Peers</h2>
-                <span class="peer-count" id="peer-count">0 peers</span>
+                <div class="peer-header-left">
+                    <h2>Connected Peers:</h2>
+                    <div class="network-counts" id="network-counts">
+                        <span class="count-total" id="count-total">0</span>
+                        <span class="count-sep">|</span>
+                        <span class="count-ipv4" id="count-ipv4" style="display: none;">IPV4 0</span>
+                        <span class="count-sep" id="sep-ipv4" style="display: none;">|</span>
+                        <span class="count-ipv6" id="count-ipv6" style="display: none;">IPV6 0</span>
+                        <span class="count-sep" id="sep-ipv6" style="display: none;">|</span>
+                        <span class="count-onion" id="count-onion" style="display: none;">TOR 0</span>
+                        <span class="count-sep" id="sep-onion" style="display: none;">|</span>
+                        <span class="count-i2p" id="count-i2p" style="display: none;">I2P 0</span>
+                        <span class="count-sep" id="sep-i2p" style="display: none;">|</span>
+                        <span class="count-cjdns" id="count-cjdns" style="display: none;">CJDNS 0</span>
+                    </div>
+                </div>
+                <div class="panel-controls">
+                    <span class="peer-count" id="peer-count">0 peers</span>
+                    <span class="filter-options-text">View/Filter Options</span>
+                    <button class="config-btn" id="column-config-btn" title="Configure visible columns">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="table-container">
+            <div class="table-container" id="peer-table-container">
                 <table class="peer-table" id="peer-table">
                     <thead>
                         <tr>
-                            <th data-sort="direction">In/Out</th>
-                            <th data-sort="addr">Address</th>
-                            <th data-sort="city">City</th>
-                            <th data-sort="country_code">Country</th>
-                            <th data-sort="conntime">Connected</th>
-                            <th data-sort="subver">Version</th>
-                            <th data-sort="connection_type">Type</th>
-                            <th data-sort="ping_ms">Ping</th>
-                            <th data-sort="bytessent">Sent</th>
-                            <th data-sort="bytesrecv">Recv</th>
-                            <th data-sort="isp">ISP</th>
-                            <th data-sort="id">ID</th>
+                            <!-- 1-6: getpeerinfo (instant) -->
+                            <th data-sort="id" data-col="id" title="Peer ID assigned by Bitcoin Core">ID</th>
+                            <th data-sort="network" data-col="network" title="Network type (ipv4, ipv6, onion, i2p, cjdns)">Net</th>
+                            <th data-sort="ip" data-col="ip" title="IP address of the peer">IP</th>
+                            <th data-sort="port" data-col="port" title="Port number">Port</th>
+                            <th data-sort="direction" data-col="direction" title="Connection direction: IN=they connected to us, OUT=we connected to them">Dir</th>
+                            <th data-sort="subver" data-col="subver" title="User agent / software version">Subver</th>
+                            <!-- 7-13: ip-api geo (loads second) -->
+                            <th data-sort="city" data-col="city" title="City from geolocation">City</th>
+                            <th data-sort="region" data-col="region" title="Region/state code">Region</th>
+                            <th data-sort="regionName" data-col="regionName" title="Full region/state name">RegionName</th>
+                            <th data-sort="country" data-col="country" title="Country name">Country</th>
+                            <th data-sort="countryCode" data-col="countryCode" title="2-letter country code">CC</th>
+                            <th data-sort="continent" data-col="continent" title="Continent name">Continent</th>
+                            <th data-sort="continentCode" data-col="continentCode" title="2-letter continent code">ContC</th>
+                            <!-- 14-19: more getpeerinfo -->
+                            <th data-sort="bytessent" data-col="bytessent" title="Total bytes sent to this peer">Sent</th>
+                            <th data-sort="bytesrecv" data-col="bytesrecv" title="Total bytes received from this peer">Recv</th>
+                            <th data-sort="ping_ms" data-col="ping_ms" title="Current ping latency in milliseconds">Ping</th>
+                            <th data-sort="conntime" data-col="conntime" title="How long connected">ConnTime</th>
+                            <th data-sort="connection_type" data-col="connection_type" title="Connection type (outbound-full-relay, inbound, etc)">ConnType</th>
+                            <th data-sort="services_abbrev" data-col="services_abbrev" title="Service flags: N=NETWORK, W=WITNESS, NL=NETWORK_LIMITED, P=P2P_V2, etc">Svc</th>
+                            <!-- 20-22: more ip-api -->
+                            <th data-sort="lat" data-col="lat" title="Latitude coordinate">Lat</th>
+                            <th data-sort="lon" data-col="lon" title="Longitude coordinate">Lon</th>
+                            <th data-sort="isp" data-col="isp" title="Internet Service Provider">ISP</th>
+                            <!-- 23: addrman status -->
+                            <th data-sort="in_addrman" data-col="in_addrman" title="Is this peer's address in our address manager?">Addrman</th>
                         </tr>
                     </thead>
                     <tbody id="peer-tbody">
                         <tr class="loading-row">
-                            <td colspan="12">Loading peers...</td>
+                            <td colspan="23">Loading peers...</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+            <div class="resize-handle" data-panel="peer-panel"></div>
+        </div>
+
+        <!-- Column Config Modal -->
+        <div class="modal" id="column-config-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Configure Columns</h3>
+                    <button class="modal-close" id="modal-close">&times;</button>
+                </div>
+                <div class="modal-body" id="column-checkboxes">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
         </div>
 
         <!-- Recent Changes Table -->
-        <div class="panel changes-panel">
+        <div class="panel changes-panel resizable-panel" id="changes-panel">
             <div class="panel-header">
                 <h2>Recent Changes</h2>
                 <span class="changes-window">Last 20 seconds</span>
             </div>
-            <div class="table-container">
+            <div class="table-container" id="changes-table-container">
                 <table class="peer-table changes-table" id="changes-table">
                     <thead>
                         <tr>
-                            <th>Time</th>
-                            <th>Event</th>
-                            <th>IP</th>
-                            <th>Network</th>
+                            <th title="Time of the event">Time</th>
+                            <th title="Type of event: connected or disconnected">Event</th>
+                            <th title="IP address of the peer">IP</th>
+                            <th title="Network type">Network</th>
                         </tr>
                     </thead>
                     <tbody id="changes-tbody">
@@ -134,11 +206,12 @@
                     </tbody>
                 </table>
             </div>
+            <div class="resize-handle" data-panel="changes-panel"></div>
         </div>
 
         <!-- Footer -->
         <footer class="footer">
-            <span>MBTC-DASH v0.2.2</span>
+            <span>MBCore Dashboard v1.0.0</span>
             <span id="refresh-timer">Refreshing in 10s</span>
         </footer>
     </div>

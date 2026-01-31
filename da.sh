@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="0.2.2"
+VERSION="1.0.0"
 
 # Venv paths
 VENV_DIR="$MBTC_DIR/venv"
@@ -61,16 +61,19 @@ show_banner() {
     echo ""
     echo -e "${T_PRIMARY}"
     cat << 'EOF'
-             ██ ██
-███╗   ███╗████████╗████████╗ ██████╗         ██████╗  █████╗ ███████╗██╗  ██╗
-████╗ ████║██╔════██║   ██╔═╝ ██╔═══╝         ██╔══██╗██╔══██╗██╔════╝██║  ██║
-██╔████╔██║████████╔╝   ██║   ██║             ██║  ██║███████║███████╗███████║
-██║╚██╔╝██║██╔════██╗   ██║   ██║             ██║  ██║██╔══██║╚════██║██╔══██║
-██║ ╚═╝ ██║████████╔╝   ██║   ╚██████╗        ██████╔╝██║  ██║███████║██║  ██║
-╚═╝     ╚═╝╚═██ ██═╝    ╚═╝    ╚═════╝        ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+███╗   ███╗██████╗  ██████╗ ██████╗ ██████╗ ███████╗
+████╗ ████║██╔══██╗██╔════╝██╔═══██╗██╔══██╗██╔════╝
+██╔████╔██║██████╔╝██║     ██║   ██║██████╔╝█████╗
+██║╚██╔╝██║██╔══██╗██║     ██║   ██║██╔══██╗██╔══╝
+██║ ╚═╝ ██║██████╔╝╚██████╗╚██████╔╝██║  ██║███████╗
+╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝
 EOF
     echo -e "${RST}"
-    echo -e "  ${T_DIM}MBTC-Dashboard${RST}          ${T_DIM}v${VERSION}${RST}"
+    echo -e "  ${T_WHITE}Dashboard${RST}  ${T_DIM}v${VERSION}${RST} ${T_WHITE}(Bitcoin Core peer info/map/tools)${RST}"
+    echo -e "  ────────────────────────────────────────────────────"
+    echo -e "  ${T_DIM}Created by mbhillrn with Claude's help${RST}"
+    echo -e "  ${T_DIM}MIT License - Free to use, modify, and distribute${RST}"
+    echo -e "  ${T_DIM}Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5${RST}"
     echo ""
 }
 

@@ -6,21 +6,44 @@ Last Updated: 2026-01-30
 Current Version: 0.2.3
 
 ================================================================================
-** DISCUSSION ITEM FOR NEXT SESSION **
+** ACTIVE REFACTOR - SESSION CACHE ARCHITECTURE **
 ================================================================================
 
-User wants to DISCUSS (not implement yet) options for making the dashboard
-load faster. Ideas to explore:
+PROBLEM: Current DB-per-peer-query approach is slow. Opening/closing SQLite
+connection for each of 20+ peers on every request adds latency.
 
-  - Multiple databases (separate DB for different data types?)
-  - Other caching strategies
-  - Lazy loading / pagination for peer table
-  - Background pre-fetching
-  - Any other performance optimization ideas
+SOLUTION: Session-based in-memory cache. DB only for historical stats.
 
-The addrman feature was removed because it was calling `getnodeaddresses 0`
-which returns thousands of addresses and was blocking startup for 40+ seconds.
-Could potentially add it back in a non-blocking way if desired.
+NEW ARCHITECTURE:
+  1. Server starts
+  2. getpeerinfo runs → TABLE DISPLAYS IMMEDIATELY (all getpeerinfo columns)
+     - Geo columns show "Stalking..." or blank
+  3. Background: For each peer, fetch geo from API (1.5s each)
+     - As each completes, that row's geo columns update via SSE
+     - Store in SESSION CACHE (Python dict) - NOT database
+  4. Once geo fetched for an IP this session, DON'T fetch again
+  5. Every 10s: getpeerinfo again
+     - Only update CHANGED fields (not everything)
+     - New peer? Add row, queue geo lookup
+     - Peer gone? Remove row, show in Recent Updates WITH IP
+  6. Background (separate, non-blocking): Save historical stats to DB
+     - first_seen, last_seen, times_seen
+     - Does NOT block the UI
+
+SESSION CACHE LOGIC:
+  - geo_cache = {"98.227.252.166": {continent, country, city, ...}, ...}
+  - Peer connects → check cache → if not found, queue API lookup
+  - Peer disconnects → keep in cache (might reconnect)
+  - Session ends → cache cleared (fresh start next time)
+
+DATABASE PURPOSE (historical only, lazy/background):
+  - first_seen: First time we ever saw this IP
+  - last_seen: Most recent time we saw this IP
+  - times_seen: How many sessions we've seen this IP
+  - NOT used for geo data (that's session cache only now)
+
+ADDRMAN NOTE: The addrman feature was NOT causing the 40s delay.
+Can add back later in non-blocking way if desired.
 
 ================================================================================
 USER SETTINGS / DECISIONS
@@ -97,47 +120,76 @@ Reset options needed (future):
   [ ] Reset entire geo cache
 
 ================================================================================
-DISPLAY COLUMNS (Terminal + Web)
+DISPLAY COLUMNS (Web Dashboard) - ALL SEPARATE, NO COMBINING
 ================================================================================
 
-Default visible:
-  - Peer ID
-  - IP
-  - Port
-  - Direction (IN/OUT)
-  - Protocol/Network
-  - Country
-  - State/Region
-  - City
-  - Version/subver (with node name)
-  - Ping (ms)
-  - Bytes received
-  - Bytes sent
-  - Last received time (Eastern)
-  - Last sent time (Eastern)
+** USER REQUIREMENT: All columns separate for now. Can combine later. **
+** Can ADD columns, but do NOT subtract/remove without asking. **
 
-Additional fields (available but maybe not default):
-  - Services (abbreviated: N W NL P with tooltip)
-  - Time Connected (formatted: Xm, Xh Xm, Xd Xh)
-  - Relay/Throttle status (addr_relay_enabled, addr_rate_limited)
-  - Connection type (outbound-full-relay, etc)
+COLUMN ORDER (left to right):
+  1.  Peer ID (getpeerinfo)
+  2.  Network type (getpeerinfo) - ipv4, ipv6, onion, i2p, cjdns
+  3.  IP (getpeerinfo)
+  4.  Port (getpeerinfo)
+  5.  Direction (getpeerinfo) - IN/OUT
+  6.  Subver (getpeerinfo) - user agent
+  7.  City (ip-api) - loads second
+  8.  Region (ip-api)
+  9.  RegionName (ip-api)
+  10. Country (ip-api)
+  11. CountryCode (ip-api)
+  12. Continent (ip-api)
+  13. ContinentCode (ip-api)
+  14. Bytes Sent (getpeerinfo)
+  15. Bytes Recv (getpeerinfo)
+  16. Ping (getpeerinfo) - ms
+  17. ConnTime (getpeerinfo) - formatted duration
+  18. Version (getpeerinfo)
+  19. ConnType (getpeerinfo)
+  20. Services (getpeerinfo) - abbreviated
+  21. Lat (ip-api)
+  22. Lon (ip-api)
+  23. ISP (ip-api)
+  24. First Seen (database) - loads last
+  25. Last Seen (database)
+  26. Times Seen (database)
+
+IP-API URL:
+  http://ip-api.com/json/{ip}?fields=continent,continentCode,country,countryCode,region,regionName,city,lat,lon,isp,query
+
+NETWORK TYPE COLORS (in table rows):
+  - ipv4: yellow
+  - ipv6: orange
+  - onion/tor: mild red
+  - i2p: light blue
+  - cjdns: light pink
+  ** If colors conflict with other UI elements, use different shades **
+
+MAP STATUS INDICATOR (corner of map):
+  - Orange circle + "Updating..." while geo lookups in progress
+  - Green circle + "Updated!" when all geo lookups complete
+  - Red circle + error message if something fails
 
 Sorting: Default by Peer ID (preserves connection order)
 
 ================================================================================
-DATABASE STORAGE
+DATABASE STORAGE (SIMPLIFIED - Historical Only)
 ================================================================================
 
-Store persistently:
-  - IP address (no port)
-  - Network type
-  - geo_status (GEO_OK=0, PRIVATE=1, GEO_UNAVAILABLE=2)
-  - All geo API fields (country, countryCode, region, regionName, city,
-    district, lat, lon, isp, as, hosting)
-  - first_seen timestamp
-  - last_seen timestamp
-  - geo_last_lookup timestamp
-  - geo_retry_count
+** NEW: DB is for historical stats ONLY, not geo caching **
+** Geo data is session-cached in memory, fetched fresh each session **
+
+New simplified schema (peers_history table):
+  - ip (PRIMARY KEY) - IP address only, no port
+  - first_seen - First time we EVER saw this IP (timestamp)
+  - last_seen - Most recent time we saw this IP (timestamp)
+  - times_seen - How many sessions we've seen this IP (integer)
+  - network_type - ipv4, ipv6, onion, i2p, cjdns (for reference)
+
+OLD fields (REMOVED from DB, now session-cached):
+  - geo_status (not needed, just fetch fresh)
+  - country, countryCode, region, city, etc (session cache)
+  - geo_last_lookup, geo_retry_count (not needed)
 
 Do NOT store (changes too frequently):
   - Most getpeerinfo stats
@@ -147,18 +199,62 @@ Do NOT store (changes too frequently):
 TODO CHECKLIST
 ================================================================================
 
-TERMINAL PEER LIST:
+** ACTIVE REFACTOR - SESSION CACHE ARCHITECTURE **
+
+PHASE 1 - ARCHITECTURE REFACTOR:
+  [ ] Remove DB queries from critical /api/peers path
+  [ ] Implement in-memory geo_cache dict
+  [ ] getpeerinfo data displays IMMEDIATELY (no DB wait)
+  [ ] Geo columns show "Stalking..." until API returns
+  [ ] Background geo worker populates session cache
+  [ ] SSE updates individual cells as geo arrives
+  [ ] Only update CHANGED fields on 10s refresh (not everything)
+
+PHASE 2 - COLUMNS (ALL SEPARATE):
+  [ ] Add all getpeerinfo columns (see DISPLAY COLUMNS section)
+  [ ] Add all ip-api columns SEPARATELY (continent, continentCode, etc)
+  [ ] Add historical columns (first_seen, last_seen, times_seen)
+  [ ] Update API call to use new fields parameter
+      http://ip-api.com/json/{ip}?fields=continent,continentCode,country,countryCode,region,regionName,city,lat,lon,isp,query
+
+PHASE 3 - NETWORK TYPE COLORS:
+  [ ] ipv4 rows: yellow tint
+  [ ] ipv6 rows: orange tint
+  [ ] onion rows: mild red tint
+  [ ] i2p rows: light blue tint
+  [ ] cjdns rows: light pink tint
+  [ ] Check colors don't conflict with other UI elements
+
+PHASE 3B - MAP STATUS INDICATOR:
+  [ ] Add status indicator to corner of map
+  [ ] Orange circle + "Updating..." while geo lookups in progress
+  [ ] Green circle + "Updated!" when all geo complete
+  [ ] Red circle + error message if something fails
+
+PHASE 4 - RECENT UPDATES PANEL FIX:
+  [ ] Store IP address when peer connects (so we have it when they disconnect)
+  [ ] When peer disconnects, show "Peer X (IP) disconnected" (not just ID)
+  [ ] Recent Updates should show: Peer ID + IP + "connected" or "disconnected"
+
+PHASE 5 - STATUS BAR FIX:
+  [ ] Only show networks we're actually connected to
+  [ ] If no cjdns peers, don't show "cjdns: 0, in: 0, out: 0"
+  [ ] If connected to a network but 0 peers, DO show it
+  [ ] Determine connected networks from getnetworkinfo reachable field
+
+PHASE 6 - DATABASE (HISTORICAL ONLY):
+  [ ] Simplify DB schema: just ip, first_seen, last_seen, times_seen
+  [ ] Update DB in background (never blocks UI)
+  [ ] Load historical stats separately from main peer data
+  [ ] times_seen increments each session we see the IP
+
+TERMINAL PEER LIST (lower priority):
   [x] Show table immediately without waiting for geo
   [x] Background thread(s) for geo lookups
   [x] Live update display as geo completes
   [x] Detect new peers mid-session, queue geo lookups
   [x] 'q' quits properly
   [ ] Scrolling works (terminal limits rows, shows "X more peers")
-
-DATABASE:
-  [x] Database in ./data/peers.db
-  [ ] Gracefully handle multiple peers with same IP
-  [ ] Verify all geo cache rules implemented
 
 PREREQS/DEPENDENCIES:
   [x] Add FastAPI to prereqs check
@@ -172,7 +268,7 @@ UNINSTALLER:
   [ ] Uninstaller removes only what we installed
   [ ] Does not affect pre-existing packages
 
-WEB DASHBOARD:
+WEB DASHBOARD (existing):
   [x] FastAPI server (not Flask)
   [x] Dynamic port selection (49152-65535)
   [x] Port conflict detection
@@ -183,7 +279,6 @@ WEB DASHBOARD:
   [x] Main peer table
   [x] Recent changes table (20 second window)
   [x] Clean shutdown on Ctrl+C
-  [ ] DB integrity check on startup
 
 DOCUMENTATION:
   [ ] Update PROJECT_PROGRESS.md
