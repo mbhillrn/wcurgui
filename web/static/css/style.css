@@ -395,6 +395,8 @@ body {
     flex: 1;
     overflow: auto;
     max-width: 100%;
+    /* Add padding at bottom so horizontal scrollbar is above resize handle */
+    padding-bottom: 12px;
 }
 
 /* Custom scrollbar styling */
@@ -422,7 +424,7 @@ body {
 }
 
 .peer-table {
-    width: max-content;
+    table-layout: fixed;
     min-width: 100%;
     border-collapse: collapse;
     font-size: 11px;
@@ -444,6 +446,8 @@ body {
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     position: relative;
     min-width: 40px;
 }

@@ -179,7 +179,7 @@ function setupColumnResize() {
         const deltaX = e.clientX - startX;
         const newWidth = Math.max(40, startWidth + deltaX);
         currentTh.style.width = newWidth + 'px';
-        currentTh.style.minWidth = newWidth + 'px';
+        // Don't set minWidth - allow columns to be shrunk later
     });
 
     document.addEventListener('mouseup', () => {
@@ -605,9 +605,37 @@ function loadColumnPreferences() {
         }
 
         applyColumnVisibility();
+
+        // Reorder header cells to match saved column order
+        reorderHeaderCells();
     } catch (e) {
         console.warn('Could not load column preferences:', e);
     }
+}
+
+// Reorder just the header cells (without re-rendering data)
+function reorderHeaderCells() {
+    const table = document.getElementById('peer-table');
+    if (!table) return;
+
+    const thead = table.querySelector('thead tr');
+    if (!thead) return;
+
+    // Get all header cells as a map
+    const headerCells = {};
+    thead.querySelectorAll('th[data-col]').forEach(th => {
+        headerCells[th.dataset.col] = th;
+    });
+
+    // Clear and rebuild header row in new order
+    const existingHeaders = Array.from(thead.querySelectorAll('th[data-col]'));
+    existingHeaders.forEach(th => th.remove());
+
+    columnOrder.forEach(col => {
+        if (headerCells[col]) {
+            thead.appendChild(headerCells[col]);
+        }
+    });
 }
 
 // Fetch peer data from API
