@@ -427,6 +427,8 @@ body {
     table-layout: fixed;
     border-collapse: collapse;
     font-size: 11px;
+    width: max-content;
+    min-width: 100%;
     /* Width is sum of column widths - no min-width so columns can shrink */
 }
 
