@@ -5,8 +5,7 @@ Local web dashboard for Bitcoin Core peer monitoring
 
 Features:
 - Dynamic port selection (49152-65535)
-- Single password auth for remote access
-- Real-time updates via WebSocket
+- Real-time updates via Server-Sent Events
 - Map with Leaflet.js
 - All peer columns available
 """
@@ -15,7 +14,6 @@ import json
 import os
 import queue
 import random
-import secrets
 import socket
 import sqlite3
 import subprocess
@@ -28,11 +26,10 @@ from typing import Optional
 
 import requests
 import uvicorn
-from fastapi import FastAPI, Request, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sse_starlette.sse import EventSourceResponse
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -48,9 +45,6 @@ RECENT_WINDOW = 20     # Seconds for recent changes
 
 # Fixed port for web dashboard (fallback to random if taken)
 WEB_PORT = 58333
-
-# Fixed username
-WEB_USERNAME = "admin"
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
@@ -74,11 +68,7 @@ RETRY_INTERVALS = [86400, 259200, 604800, 604800]
 
 # FastAPI app
 app = FastAPI(title="MBTC-DASH", description="Bitcoin Peer Dashboard")
-security = HTTPBasic()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-
-# Session password (generated on each startup)
-SESSION_PASSWORD = ""
 
 # Thread-safe state
 current_peers = []
@@ -599,21 +589,6 @@ def broadcast_update(event_type: str, data: dict):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# AUTH
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def verify_password(credentials: HTTPBasicCredentials = Depends(security)):
-    """Verify the username and session password"""
-    if credentials.username != WEB_USERNAME or credentials.password != SESSION_PASSWORD:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return True
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -649,7 +624,7 @@ def abbrev_connection_type(conn_type: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/peers")
-async def api_peers(auth: bool = Depends(verify_password)):
+async def api_peers():
     """Get all current peers with full data - uses SESSION CACHE (no DB queries!)"""
     with peers_lock:
         peers_snapshot = list(current_peers)
@@ -746,7 +721,7 @@ async def api_peers(auth: bool = Depends(verify_password)):
 
 
 @app.get("/api/changes")
-async def api_changes(auth: bool = Depends(verify_password)):
+async def api_changes():
     """Get recent peer changes"""
     with changes_lock:
         changes = list(recent_changes)
@@ -754,7 +729,7 @@ async def api_changes(auth: bool = Depends(verify_password)):
 
 
 @app.get("/api/stats")
-async def api_stats(auth: bool = Depends(verify_password)):
+async def api_stats():
     """Get dashboard statistics"""
     # Get fresh peer info from RPC
     peers = get_peer_info()
@@ -848,13 +823,6 @@ C_PINK = "\033[35m"
 C_CYAN = "\033[36m"
 C_WHITE = "\033[37m"
 
-def generate_password(length: int = 5) -> str:
-    """Generate a short alphanumeric password"""
-    import string
-    chars = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(chars) for _ in range(length))
-
-
 def find_fallback_port() -> int:
     """Find a random available port in high range"""
     import random
@@ -866,17 +834,12 @@ def find_fallback_port() -> int:
 
 
 def main():
-    global SESSION_PASSWORD
-
     # Initialize
     init_database()
 
     if not config.load():
         print("Error: Configuration not found. Run ./da.sh first to configure.")
         sys.exit(1)
-
-    # Generate short session password (5 chars)
-    SESSION_PASSWORD = generate_password(5)
 
     # Use fixed port, fallback to random if taken
     port = WEB_PORT
@@ -928,11 +891,6 @@ def main():
     print(f"  {C_YELLOW}To enter the dashboard, visit:{C_RESET}")
     print(f"    {C_CYAN}http://{lan_ip}:{port}{C_RESET}        {C_DIM}From anywhere on your network{C_RESET}")
     print(f"    {C_CYAN}http://127.0.0.1:{port}{C_RESET}       {C_DIM}From the local node machine{C_RESET}")
-    print("")
-    print(f"  {C_WHITE}User:{C_RESET}        {C_BOLD}{C_GREEN}{WEB_USERNAME}{C_RESET}")
-    print(f"  {C_WHITE}Password:{C_RESET}    {C_BOLD}{C_GREEN}{SESSION_PASSWORD}{C_RESET}")
-    print("")
-    print(f"  {C_DIM}(Username stays {WEB_USERNAME}. Password is random each session){C_RESET}")
     print("")
     print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
     print(f"  {C_BOLD}{C_RED}TROUBLESHOOTING:{C_RESET}")

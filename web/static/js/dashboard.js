@@ -733,6 +733,7 @@ async function fetchStats() {
 function updateProtocolStatus(enabled) {
     const enabledEl = document.getElementById('protocols-enabled');
     const disabledEl = document.getElementById('protocols-disabled');
+    const hintEl = document.getElementById('protocol-hint');
     if (!enabledEl || !disabledEl) return;
 
     const allProtocols = ['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns'];
@@ -751,11 +752,13 @@ function updateProtocolStatus(enabled) {
 
     if (disabledProtos.length === 0) {
         disabledEl.innerHTML = '<span class="proto-all-configured">All Protocols Configured</span>';
+        if (hintEl) hintEl.style.display = 'none';
     } else {
         const disabledList = disabledProtos
             .map(p => `<span class="proto-${p}">${protoLabels[p]}</span>`)
             .join(' ');
         disabledEl.innerHTML = disabledList;
+        if (hintEl) hintEl.style.display = '';
     }
 }
 

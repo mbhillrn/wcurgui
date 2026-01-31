@@ -136,6 +136,13 @@ body {
 .protocol-list .proto-cjdns { color: var(--net-cjdns); }
 .protocol-list .proto-all-configured { color: var(--accent-green); }
 
+.protocol-hint {
+    font-size: 9px;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-top: 2px;
+}
+
 .status-indicator {
     width: 8px;
     height: 8px;
