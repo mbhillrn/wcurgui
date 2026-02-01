@@ -2,11 +2,15 @@
 
 A lightweight monitoring tool for Bitcoin Core nodes that visualizes peer connections on an interactive world map.
 
+- Interactive world map of YOUR node's actual connected peers
+- Zero config - just point at bitcoind
+- All 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS)
+- No accounts, no external services, runs locally
+- Lightweight single script install
+- Real-time with SSE updates
+- Beautiful terminal aesthetic
+
 **Requires:** Bitcoin Core (`bitcoind`) installed and running on your system.
-
-**Protocol Compatibility:** IPv4, IPv6, Tor, I2P, and CJDNS - all supported.
-
-**No accounts, registrations, or sign-ups required.** Everything runs locally on your machine.
 
 ## Why?
 
