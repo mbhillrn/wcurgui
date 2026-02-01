@@ -341,6 +341,44 @@ Click the gear icon on the right to configure:
 - **Show/Hide** - Toggle visibility of individual metrics
 - **Collapse Panel** - Minimize the panel to just the gear icon
 
+### Dashboard Column Reference
+
+The peer table displays detailed information about each connected peer. Click the gear icon (⚙️) above the table to customize which columns are visible.
+
+#### Connection Type Badges
+
+The **Type** column shows color-coded badges indicating how each peer is connected:
+
+| Badge | Color | Description |
+|-------|-------|-------------|
+| **INB** | 🟢 Green | **Inbound** - They connected to us (full relay) |
+| **OFR** | 🔵 Blue | **Outbound Full Relay** - We connected to them (transactions + blocks) |
+| **BLO** | 🔵 Dark Blue | **Block Relay Only** - We connected, blocks only (no transactions - privacy feature) |
+| **MAN** | 🩷 Pink | **Manual** - Added via `addnode` command |
+| **FET** | 🩵 Cyan | **Address Fetch** - Temporary connection to get peer addresses |
+| **FEL** | 🩵 Cyan | **Feeler** - Temporary connection to test if a node is reachable |
+
+Hover over any badge to see its full description.
+
+#### Direction Badges (Optional Column)
+
+The **in/out** column (available via Configure) shows simple direction badges:
+
+| Badge | Color | Description |
+|-------|-------|-------------|
+| **IN** | 🟢 Green | Inbound - They connected to us |
+| **OUT** | 🔵 Blue | Outbound - We connected to them |
+
+#### Other Key Columns
+
+| Column | Description |
+|--------|-------------|
+| **ID** | Peer ID assigned by Bitcoin Core |
+| **Net** | Network type (ipv4, ipv6, onion, i2p, cjdns) |
+| **Since** | Connection duration (e.g., `2m30s`, `1h15m`, `3d4h`) |
+| **Service** | Service flags (N=NETWORK, W=WITNESS, etc.) |
+| **In Addrman?** | Whether this peer's address is in our address manager |
+
 ## Project Structure
 
 ```
