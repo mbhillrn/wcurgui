@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="2.2.4"
+VERSION="2.3.4"
 GITHUB_REPO="mbhillrn/MBCore-Dashboard"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/da.sh"
 UPDATE_AVAILABLE=0
@@ -134,10 +134,11 @@ show_menu() {
     echo -e "     ${T_DIM}- Clear saved configuration${RST}"
     echo -e "  ${T_INFO}3)${RST} Reset MBCore Database"
     echo -e "     ${T_DIM}- Clear peer geo-location cache${RST}"
+    echo -e "  ${T_INFO}4)${RST} Firewall Helper"
+    echo -e "     ${T_DIM}- Configure firewall for network access${RST}"
     echo ""
-    echo -e "  ${T_WARN}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
-    echo -e "  ${T_WARN}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
-    echo -e "  ${T_WARN}f)${RST} Firewall Helper    ${T_DIM}- Configure firewall for network access${RST}"
+    echo -e "  ${T_DIM}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
+    echo -e "  ${T_DIM}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
     echo -e "  ${T_DIM}t)${RST} Terminal View      ${T_DIM}- Very limited terminal peer list${RST}"
     if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
         echo -e "  ${T_WARN}u)${RST} Update             ${T_DIM}- Update to v${LATEST_VERSION}${RST}"
@@ -694,20 +695,20 @@ main() {
             1)
                 run_web_dashboard
                 ;;
-            d|D)
-                run_detection
-                ;;
-            m|M)
-                run_manual_config
-                ;;
-            f|F)
-                firewall_helper
-                ;;
             2)
                 reset_config
                 ;;
             3)
                 reset_database
+                ;;
+            4|f|F)
+                firewall_helper
+                ;;
+            d|D)
+                run_detection
+                ;;
+            m|M)
+                run_manual_config
                 ;;
             t|T)
                 run_peer_list

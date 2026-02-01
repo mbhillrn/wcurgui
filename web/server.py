@@ -791,6 +791,152 @@ async def api_stats():
     }
 
 
+@app.get("/api/info")
+async def api_info(currency: str = "USD"):
+    """Get dashboard info panel data: BTC price, block info, blockchain stats, network scores, system stats"""
+    result = {
+        'btc_price': None,
+        'btc_currency': currency,
+        'last_block': None,
+        'blockchain': None,
+        'network_scores': None,
+        'system_stats': None
+    }
+
+    # 1. Bitcoin price from Coinbase API
+    try:
+        response = requests.get(f"https://api.coinbase.com/v2/prices/BTC-{currency}/spot", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            price = data.get('data', {}).get('amount')
+            if price:
+                result['btc_price'] = price
+    except Exception as e:
+        print(f"BTC price fetch error: {e}")
+
+    # 2. Last block info
+    try:
+        # Get best block hash
+        cmd = config.get_cli_command() + ['getbestblockhash']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            blockhash = r.stdout.strip()
+            # Get block header
+            cmd = config.get_cli_command() + ['getblockheader', blockhash]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if r.returncode == 0:
+                header = json.loads(r.stdout)
+                height = header.get('height', 0)
+                block_time = header.get('time', 0)
+                result['last_block'] = {
+                    'height': height,
+                    'time': block_time
+                }
+    except Exception as e:
+        print(f"Last block fetch error: {e}")
+
+    # 3. Blockchain stats (size, pruned, indexed, IBD status)
+    try:
+        cmd = config.get_cli_command() + ['getblockchaininfo']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            info = json.loads(r.stdout)
+            pruned = info.get('pruned', False)
+            size_bytes = info.get('size_on_disk', 0)
+            size_gb = round(size_bytes / 1e9, 1)
+            ibd = info.get('initialblockdownload', False)
+
+            # Check if txindex is enabled
+            indexed = False
+            try:
+                cmd = config.get_cli_command() + ['getindexinfo']
+                r2 = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if r2.returncode == 0:
+                    index_info = json.loads(r2.stdout)
+                    indexed = 'txindex' in index_info
+            except:
+                pass
+
+            result['blockchain'] = {
+                'size_gb': size_gb,
+                'pruned': pruned,
+                'indexed': indexed,
+                'ibd': ibd
+            }
+    except Exception as e:
+        print(f"Blockchain stats fetch error: {e}")
+
+    # 4. Network scores from getnetworkinfo localaddresses
+    try:
+        cmd = config.get_cli_command() + ['getnetworkinfo']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            netinfo = json.loads(r.stdout)
+            local_addrs = netinfo.get('localaddresses', [])
+            scores = {'ipv4': None, 'ipv6': None}
+            for addr_info in local_addrs:
+                addr = addr_info.get('address', '')
+                score = addr_info.get('score', 0)
+                # Determine network type
+                if addr.endswith('.onion') or addr.endswith('.i2p'):
+                    continue  # Skip Tor/I2P
+                elif addr.startswith('fc') or addr.startswith('fd'):
+                    continue  # Skip CJDNS
+                elif ':' in addr and addr.count(':') > 1:
+                    # IPv6
+                    if scores['ipv6'] is None or score > scores['ipv6']:
+                        scores['ipv6'] = score
+                else:
+                    # IPv4
+                    if scores['ipv4'] is None or score > scores['ipv4']:
+                        scores['ipv4'] = score
+            result['network_scores'] = scores
+    except Exception as e:
+        print(f"Network scores fetch error: {e}")
+
+    # 5. System stats (CPU and memory)
+    try:
+        # CPU usage via vmstat
+        cpu_pct = None
+        try:
+            r = subprocess.run(['vmstat', '1', '2'], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                lines = r.stdout.strip().split('\n')
+                if len(lines) >= 3:
+                    # Use the second measurement (line 3)
+                    parts = lines[-1].split()
+                    if len(parts) >= 15:
+                        idle = int(parts[14])
+                        cpu_pct = 100 - idle
+        except:
+            pass
+
+        # Memory usage via /proc/meminfo
+        mem_pct = None
+        try:
+            with open('/proc/meminfo', 'r') as f:
+                mem_total = 0
+                mem_avail = 0
+                for line in f:
+                    if line.startswith('MemTotal:'):
+                        mem_total = int(line.split()[1])
+                    elif line.startswith('MemAvailable:'):
+                        mem_avail = int(line.split()[1])
+                if mem_total > 0:
+                    mem_pct = round((1 - mem_avail / mem_total) * 100, 1)
+        except:
+            pass
+
+        result['system_stats'] = {
+            'cpu_pct': cpu_pct,
+            'mem_pct': mem_pct
+        }
+    except Exception as e:
+        print(f"System stats fetch error: {e}")
+
+    return result
+
+
 @app.get("/api/events")
 async def api_events(request: Request):
     """Server-Sent Events endpoint for real-time updates"""
@@ -951,7 +1097,7 @@ def main():
     print(f"  {C_BOLD}{C_BLUE}██║╚██╔╝██║██╔══██╗██║     ██║   ██║██╔══██╗██╔══╝  {C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}██║ ╚═╝ ██║██████╔╝╚██████╗╚██████╔╝██║  ██║███████╗{C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝{C_RESET}")
-    print(f"  {C_BOLD}{C_WHITE}Dashboard{C_RESET}  {C_DIM}v2.2.4{C_RESET} {C_WHITE}(Bitcoin Core peer info/map/tools){C_RESET}")
+    print(f"  {C_BOLD}{C_WHITE}Dashboard{C_RESET}  {C_DIM}v2.3.4{C_RESET} {C_WHITE}(Bitcoin Core peer info/map/tools){C_RESET}")
     print(f"  {'─' * logo_w}")
     print(f"  {C_DIM}Created by mbhillrn{C_RESET}")
     print(f"  {C_DIM}MIT License - Free to use, modify, and distribute{C_RESET}")

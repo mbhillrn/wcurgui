@@ -2,9 +2,15 @@
 
 A lightweight monitoring tool for Bitcoin Core nodes that visualizes peer connections on an interactive world map.
 
-**Requires:** Bitcoin Core (`bitcoind`) installed and running on your system.
+- Interactive world map of YOUR node's actual connected peers
+- Zero config - just point at bitcoind
+- All 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS)
+- No accounts, no external services, runs locally
+- Lightweight single script install
+- Real-time with SSE updates
+- Beautiful terminal aesthetic
 
-**No accounts, registrations, or sign-ups required.** Everything runs locally on your machine.
+**Requires:** Bitcoin Core (`bitcoind`) installed and running on your system.
 
 ## Why?
 
@@ -25,6 +31,11 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 - **Version Display** - Shows current version in the header
 - **Auto-Update** - Checks for updates from GitHub and offers one-click updates from the menu
 - **Antarctica Toggle** - Hide or show private network peers displayed in the Antarctica map area
+- **Live BTC Price** - Real-time Bitcoin price from Coinbase API with 10 currency options (USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, HKD, SGD)
+- **Blockchain Status** - View blockchain size, node type (full/pruned), index status, and sync state
+- **Network Scores** - Display local address scores for IPv4 and IPv6 from Bitcoin Core
+- **System Monitor** - Live CPU and memory usage percentages
+- **Collapsible Info Panel** - Configurable panel with show/hide options for each metric
 
 ## Quick Start
 
@@ -108,6 +119,8 @@ All dependencies are automatically detected on startup. If anything is missing, 
 | `curl` | HTTP client for API calls |
 | `sqlite3` | Database for caching peer geo-location data |
 | `python3` | Python interpreter (3.8+) |
+| `vmstat` | System statistics for CPU monitoring |
+| `awk` | Text processing for system stats |
 
 ### System Tools (Optional)
 
@@ -203,6 +216,21 @@ Click any row in the peer table to highlight that peer on the map. The map will 
 Peers using private networks (Tor, I2P, CJDNS) and peers with unavailable geo-location don't have real geographic coordinates. These peers are still shown on the map, scattered across the northern coast of Antarctica. Each peer maintains a stable position during its connection, so dots won't jump around between refreshes. You can identify them by their network color in the popup.
 
 If you prefer not to see these Antarctica dots, click the "Hide" link in the map legend (next to "Private"). Click "Show" to bring them back. Your preference is saved automatically.
+
+### Info Panel
+
+The info panel displays live system and Bitcoin data including:
+- **BTC Price** - Current Bitcoin price (updates every 60 seconds by default)
+- **Last Block** - Date/time and height of the most recent block
+- **Blockchain** - Storage size and node status (Full/Pruned, Indexed, sync state)
+- **Network Scores** - Local address advertisement scores for IPv4 and IPv6
+- **System Stats** - Current CPU and memory usage
+
+Click the gear icon on the right to configure:
+- **Currency** - Choose from USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, HKD, or SGD
+- **Update Interval** - Set how often the panel refreshes (30s, 1m, 2m, or 5m)
+- **Show/Hide** - Toggle visibility of individual metrics
+- **Collapse Panel** - Minimize the panel to just the gear icon
 
 ## Project Structure
 

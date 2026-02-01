@@ -13,7 +13,7 @@
         <!-- Header -->
         <header class="header">
             <div class="header-title">
-                <h1 class="logo-text">MBCore Dashboard <span class="version">v2.2.2</span></h1>
+                <h1 class="logo-text">MBCore Dashboard <span class="version">v2.3.4</span></h1>
                 <span class="subtitle">Peer info, map, and tools for Bitcoin Core</span>
                 <span class="credits">Created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
             </div>
@@ -36,43 +36,170 @@
             </div>
         </header>
 
-        <!-- Stats Bar - Redesigned -->
-        <div class="stats-bar">
-            <div class="stat-block">
-                <span class="stat-title">Connected</span>
-                <span class="stat-data" id="stat-connected">-</span>
+        <!-- Node Status Panel - Unified -->
+        <div class="panel node-status-panel" id="node-status-panel">
+            <div class="panel-header">
+                <h2>Node Status</h2>
+                <div class="panel-header-right">
+                    <span class="status-time">
+                        <span class="time-item">Next: <span id="stat-countdown">10s</span></span>
+                        <span class="time-sep">|</span>
+                        <span class="time-item" id="stat-localtime">--:--:--</span>
+                    </span>
+                    <button class="panel-config-btn" id="node-config-btn" title="Configure panel">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                        </svg>
+                    </button>
+                    <!-- Settings Dropdown -->
+                    <div class="node-config-dropdown" id="node-config-dropdown">
+                        <div class="dropdown-section">
+                            <span class="dropdown-section-title">Update Frequency</span>
+                            <div class="dropdown-row">
+                                <input type="text" id="refresh-rate-input" value="10" class="refresh-input" title="Update frequency in seconds">
+                                <span class="dropdown-unit">seconds</span>
+                            </div>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-section">
+                            <span class="dropdown-section-title">BTC Currency</span>
+                            <select id="info-currency-select" class="info-currency-select">
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="GBP">GBP</option>
+                                <option value="JPY">JPY</option>
+                                <option value="CHF">CHF</option>
+                                <option value="CAD">CAD</option>
+                                <option value="AUD">AUD</option>
+                                <option value="CNY">CNY</option>
+                                <option value="HKD">HKD</option>
+                                <option value="SGD">SGD</option>
+                            </select>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-section">
+                            <span class="dropdown-section-title">Show/Hide Cards</span>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-networks" checked> Network Stats
+                            </label>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-chain" checked> Node Info
+                            </label>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-system" checked> System
+                            </label>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-btc" checked> BTC Price
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="stat-block stat-network" id="stat-ipv4-wrap" style="display: none;">
-                <span class="stat-title">IPv4 (in/out)</span>
-                <span class="stat-data stat-ipv4" id="stat-ipv4">-</span>
-            </div>
-            <div class="stat-block stat-network" id="stat-ipv6-wrap" style="display: none;">
-                <span class="stat-title">IPv6 (in/out)</span>
-                <span class="stat-data stat-ipv6" id="stat-ipv6">-</span>
-            </div>
-            <div class="stat-block stat-network" id="stat-onion-wrap" style="display: none;">
-                <span class="stat-title">Tor (in/out)</span>
-                <span class="stat-data stat-onion" id="stat-onion">-</span>
-            </div>
-            <div class="stat-block stat-network" id="stat-i2p-wrap" style="display: none;">
-                <span class="stat-title">I2P (in/out)</span>
-                <span class="stat-data stat-i2p" id="stat-i2p">-</span>
-            </div>
-            <div class="stat-block stat-network" id="stat-cjdns-wrap" style="display: none;">
-                <span class="stat-title">CJDNS (in/out)</span>
-                <span class="stat-data stat-cjdns" id="stat-cjdns">-</span>
-            </div>
-            <div class="stat-block stat-freq">
-                <span class="stat-title">Update Freq</span>
-                <span class="stat-data"><input type="text" id="refresh-rate-input" value="10" title="Enter update frequency in seconds">s</span>
-            </div>
-            <div class="stat-block stat-timer">
-                <span class="stat-title">Next Update</span>
-                <span class="stat-data" id="stat-countdown">10s</span>
-            </div>
-            <div class="stat-block stat-time">
-                <span class="stat-title">Local Time</span>
-                <span class="stat-data" id="stat-localtime">--:--:--</span>
+            <div class="node-status-content">
+                <!-- Connected Card -->
+                <div class="status-card card-connected">
+                    <div class="card-label">Connected</div>
+                    <div class="card-value-large" id="stat-connected">-</div>
+                </div>
+
+                <!-- Networks Card -->
+                <div class="status-card card-networks" id="card-networks">
+                    <div class="networks-grid">
+                        <div class="network-col" id="net-ipv4-wrap">
+                            <span class="net-name net-ipv4">IPv4</span>
+                            <div class="net-inout-row">
+                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-ipv4-in">-</span></span>
+                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-ipv4-out">-</span></span>
+                            </div>
+                            <span class="net-score-label">Score</span>
+                            <span class="net-score" id="info-score-ipv4">-</span>
+                        </div>
+                        <div class="network-col" id="net-ipv6-wrap">
+                            <span class="net-name net-ipv6">IPv6</span>
+                            <div class="net-inout-row">
+                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-ipv6-in">-</span></span>
+                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-ipv6-out">-</span></span>
+                            </div>
+                            <span class="net-score-label">Score</span>
+                            <span class="net-score" id="info-score-ipv6">-</span>
+                        </div>
+                        <div class="network-col" id="net-onion-wrap">
+                            <span class="net-name net-onion">Tor</span>
+                            <div class="net-inout-row">
+                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-onion-in">-</span></span>
+                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-onion-out">-</span></span>
+                            </div>
+                            <span class="net-score-label">Score</span>
+                            <span class="net-score">overlay</span>
+                        </div>
+                        <div class="network-col" id="net-i2p-wrap">
+                            <span class="net-name net-i2p">I2P</span>
+                            <div class="net-inout-row">
+                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-i2p-in">-</span></span>
+                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-i2p-out">-</span></span>
+                            </div>
+                            <span class="net-score-label">Score</span>
+                            <span class="net-score">overlay</span>
+                        </div>
+                        <div class="network-col" id="net-cjdns-wrap">
+                            <span class="net-name net-cjdns">CJDNS</span>
+                            <div class="net-inout-row">
+                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-cjdns-in">-</span></span>
+                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-cjdns-out">-</span></span>
+                            </div>
+                            <span class="net-score-label">Score</span>
+                            <span class="net-score">overlay</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Node Info Card -->
+                <div class="status-card card-node" id="card-node">
+                    <div class="card-label">Node Info</div>
+                    <div class="node-info-grid">
+                        <div class="node-info-row">
+                            <span class="node-info-value" id="info-chain-size">-</span>
+                        </div>
+                        <div class="node-info-row">
+                            <span class="node-info-value" id="info-node-type">-</span>
+                        </div>
+                        <div class="node-info-row">
+                            <span class="node-info-value" id="info-node-indexed">-</span>
+                        </div>
+                        <div class="node-info-row">
+                            <span class="node-info-value" id="info-sync-status">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Card -->
+                <div class="status-card card-system" id="card-system">
+                    <div class="card-label">System</div>
+                    <div class="system-stats">
+                        <div class="system-row">
+                            <span class="system-label">CPU</span>
+                            <span class="system-value" id="info-cpu">-</span>
+                            <span class="system-unit">%</span>
+                        </div>
+                        <div class="system-row">
+                            <span class="system-label">MEM</span>
+                            <span class="system-value" id="info-mem">-</span>
+                            <span class="system-unit">%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BTC Price Card -->
+                <div class="status-card card-btc" id="card-btc">
+                    <div class="card-label">BTC Price</div>
+                    <div class="btc-price" id="info-btc-price">-</div>
+                    <div class="btc-currency" id="info-btc-currency">USD</div>
+                    <div class="btc-block">
+                        <span class="btc-block-label">Last Block:</span>
+                        <span class="btc-block-value" id="info-last-block">-</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -235,7 +362,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <span>MBCore Dashboard v2.2.2 | created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
+            <span>MBCore Dashboard v2.3.4 | created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
             <span id="refresh-timer">Refreshing in 10s</span>
         </footer>
     </div>

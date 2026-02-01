@@ -1079,25 +1079,31 @@ async function fetchStats() {
             countTotal.textContent = `all ${stats.connected || 0}`;
         }
 
-        // Network stats - only show if enabled, with (in/out) format in stats bar
-        // and network counts in peer header
+        // Network stats - ALWAYS show all networks in Node Status panel
+        // Use stacked In X / Out Y format with separate elements
         const networkNames = ['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns'];
         const networkLabels = { 'ipv4': 'IPV4', 'ipv6': 'IPV6', 'onion': 'TOR', 'i2p': 'I2P', 'cjdns': 'CJDNS' };
 
         networkNames.forEach(net => {
-            // Stats bar elements
-            const wrap = document.getElementById(`stat-${net}-wrap`);
-            const val = document.getElementById(`stat-${net}`);
+            // Node Status panel network column elements
+            const wrap = document.getElementById(`net-${net}-wrap`);
+            const inEl = document.getElementById(`stat-${net}-in`);
+            const outEl = document.getElementById(`stat-${net}-out`);
 
             // Peer header count elements
             const countEl = document.getElementById(`count-${net}`);
             const sepEl = document.getElementById(`sep-${net}`);
 
-            if (wrap && val) {
+            // Always show network in Node Status panel
+            if (wrap) {
+                wrap.classList.remove('hidden');
+
                 if (enabled.includes(net)) {
-                    wrap.style.display = '';
+                    // Configured - show actual counts
+                    wrap.classList.remove('not-configured');
                     const netData = networks[net] || {in: 0, out: 0};
-                    val.textContent = `(${netData.in}/${netData.out})`;
+                    if (inEl) inEl.textContent = netData.in;
+                    if (outEl) outEl.textContent = netData.out;
 
                     // Update peer header counts
                     if (countEl) {
@@ -1109,7 +1115,12 @@ async function fetchStats() {
                         sepEl.style.display = '';
                     }
                 } else {
-                    wrap.style.display = 'none';
+                    // Not configured - show dashes and add class
+                    wrap.classList.add('not-configured');
+                    if (inEl) inEl.textContent = '-';
+                    if (outEl) outEl.textContent = '-';
+
+                    // Hide from peer header if not configured
                     if (countEl) countEl.style.display = 'none';
                     if (sepEl) sepEl.style.display = 'none';
                 }
@@ -1674,4 +1685,284 @@ window.addEventListener('beforeunload', () => {
     if (refreshTimer) {
         clearInterval(refreshTimer);
     }
+    if (infoTimer) {
+        clearInterval(infoTimer);
+    }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NODE STATUS PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let infoCurrency = 'USD';
+let infoTimer = null;
+let infoVisibility = {
+    networks: true,
+    chain: true,
+    system: true,
+    btc: true
+};
+
+// Initialize node status panel on DOM load
+document.addEventListener('DOMContentLoaded', () => {
+    loadNodeStatusPreferences();
+    setupNodeStatusControls();
+    fetchInfoPanel();
+    startInfoPanelTimer();
+});
+
+// Load node status panel preferences from localStorage
+function loadNodeStatusPreferences() {
+    try {
+        // Currency
+        const savedCurrency = localStorage.getItem('mbcore_info_currency');
+        if (savedCurrency) {
+            infoCurrency = savedCurrency;
+            const select = document.getElementById('info-currency-select');
+            if (select) select.value = infoCurrency;
+        }
+
+        // Visibility settings
+        const savedVisibility = localStorage.getItem('mbcore_card_visibility');
+        if (savedVisibility) {
+            infoVisibility = JSON.parse(savedVisibility);
+        }
+        applyCardVisibility();
+    } catch (e) {
+        console.warn('Could not load node status preferences:', e);
+    }
+}
+
+// Setup node status panel controls
+function setupNodeStatusControls() {
+    const configBtn = document.getElementById('node-config-btn');
+    const dropdown = document.getElementById('node-config-dropdown');
+
+    // Toggle dropdown with fixed positioning
+    if (configBtn && dropdown) {
+        configBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // Position dropdown relative to button using fixed positioning
+            const btnRect = configBtn.getBoundingClientRect();
+            dropdown.style.top = (btnRect.bottom + 4) + 'px';
+            dropdown.style.right = (window.innerWidth - btnRect.right) + 'px';
+            dropdown.style.left = 'auto';
+
+            dropdown.classList.toggle('active');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            dropdown.classList.remove('active');
+        });
+
+        dropdown.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // Reposition dropdown on window resize
+        window.addEventListener('resize', () => {
+            if (dropdown.classList.contains('active')) {
+                const btnRect = configBtn.getBoundingClientRect();
+                dropdown.style.top = (btnRect.bottom + 4) + 'px';
+                dropdown.style.right = (window.innerWidth - btnRect.right) + 'px';
+            }
+        });
+    }
+
+    // Currency select
+    const currencySelect = document.getElementById('info-currency-select');
+    if (currencySelect) {
+        currencySelect.addEventListener('change', () => {
+            infoCurrency = currencySelect.value;
+            localStorage.setItem('mbcore_info_currency', infoCurrency);
+            fetchInfoPanel(); // Refresh immediately
+        });
+    }
+
+    // Visibility checkboxes for cards
+    const visibilityMap = {
+        'info-show-networks': 'networks',
+        'info-show-chain': 'chain',
+        'info-show-system': 'system',
+        'info-show-btc': 'btc'
+    };
+
+    Object.entries(visibilityMap).forEach(([id, key]) => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.checked = infoVisibility[key];
+            checkbox.addEventListener('change', () => {
+                infoVisibility[key] = checkbox.checked;
+                localStorage.setItem('mbcore_card_visibility', JSON.stringify(infoVisibility));
+                applyCardVisibility();
+            });
+        }
+    });
+}
+
+// Apply visibility settings to cards
+function applyCardVisibility() {
+    const cards = {
+        'networks': 'card-networks',
+        'chain': 'card-node',
+        'system': 'card-system',
+        'btc': 'card-btc'
+    };
+
+    Object.entries(cards).forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (infoVisibility[key]) {
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+    });
+}
+
+// Start info panel update timer (uses the main refresh interval)
+function startInfoPanelTimer() {
+    // Info panel updates every 60 seconds by default
+    infoTimer = setInterval(() => {
+        fetchInfoPanel();
+    }, 60000);
+}
+
+// Fetch info panel data from API
+async function fetchInfoPanel() {
+    try {
+        const response = await fetch(`${API_BASE}/api/info?currency=${infoCurrency}`);
+        if (!response.ok) throw new Error('Failed to fetch info');
+
+        const data = await response.json();
+        updateInfoPanel(data);
+    } catch (error) {
+        console.error('Error fetching info panel:', error);
+    }
+}
+
+// Format price with appropriate decimal places
+function formatPrice(priceStr, currency) {
+    if (!priceStr) return '-';
+
+    const price = parseFloat(priceStr);
+    if (isNaN(price)) return '-';
+
+    // Currencies that typically don't use decimals
+    const noDecimalCurrencies = ['JPY', 'KRW'];
+
+    if (noDecimalCurrencies.includes(currency)) {
+        return Math.round(price).toLocaleString();
+    }
+
+    // If the price has more than 2 decimal places, show up to 4
+    // Otherwise show 2
+    const decimalPart = priceStr.split('.')[1] || '';
+    if (decimalPart.length > 2) {
+        // Show up to 4 decimals, but trim trailing zeros
+        const formatted = price.toFixed(4);
+        return parseFloat(formatted).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 4
+        });
+    } else {
+        return price.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+}
+
+// Format block time to local time string
+function formatBlockTime(timestamp) {
+    if (!timestamp) return '-';
+
+    const date = new Date(timestamp * 1000);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'p' : 'a';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 becomes 12
+
+    return `${month}/${day} ${hours}:${minutes}${ampm}`;
+}
+
+// Update node status panel with data
+function updateInfoPanel(data) {
+    // BTC Price
+    const priceEl = document.getElementById('info-btc-price');
+    const currencyEl = document.getElementById('info-btc-currency');
+    if (priceEl) {
+        priceEl.textContent = '$' + formatPrice(data.btc_price, data.btc_currency);
+    }
+    if (currencyEl) {
+        currencyEl.textContent = data.btc_currency || 'USD';
+    }
+
+    // Last Block
+    const blockEl = document.getElementById('info-last-block');
+    if (blockEl && data.last_block) {
+        const timeStr = formatBlockTime(data.last_block.time);
+        blockEl.textContent = `${timeStr} (${data.last_block.height.toLocaleString()})`;
+    }
+
+    // Node Info Card
+    const sizeEl = document.getElementById('info-chain-size');
+    const typeEl = document.getElementById('info-node-type');
+    const indexedEl = document.getElementById('info-node-indexed');
+    const syncEl = document.getElementById('info-sync-status');
+
+    if (data.blockchain) {
+        if (sizeEl) {
+            sizeEl.textContent = `${data.blockchain.size_gb} GB`;
+        }
+        if (typeEl) {
+            typeEl.textContent = data.blockchain.pruned ? 'Pruned' : 'Full Node';
+        }
+        if (indexedEl) {
+            indexedEl.textContent = data.blockchain.indexed ? 'Indexed' : 'Not Indexed';
+        }
+        if (syncEl) {
+            const upToDate = !data.blockchain.ibd;
+            syncEl.textContent = upToDate ? 'Up to date' : 'Syncing...';
+            syncEl.className = 'node-info-value ' + (upToDate ? 'status-ok' : 'status-syncing');
+        }
+    }
+
+    // Network Scores (IPv4 and IPv6 only)
+    const ipv4El = document.getElementById('info-score-ipv4');
+    const ipv6El = document.getElementById('info-score-ipv6');
+    if (data.network_scores) {
+        if (ipv4El) {
+            ipv4El.textContent = data.network_scores.ipv4 !== null
+                ? data.network_scores.ipv4.toLocaleString()
+                : '-';
+        }
+        if (ipv6El) {
+            ipv6El.textContent = data.network_scores.ipv6 !== null
+                ? data.network_scores.ipv6.toLocaleString()
+                : '-';
+        }
+    }
+
+    // System Stats
+    const cpuEl = document.getElementById('info-cpu');
+    const memEl = document.getElementById('info-mem');
+    if (data.system_stats) {
+        if (cpuEl) {
+            cpuEl.textContent = data.system_stats.cpu_pct !== null
+                ? data.system_stats.cpu_pct
+                : '-';
+        }
+        if (memEl) {
+            memEl.textContent = data.system_stats.mem_pct !== null
+                ? data.system_stats.mem_pct
+                : '-';
+        }
+    }
+}

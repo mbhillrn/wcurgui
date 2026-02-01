@@ -172,93 +172,357 @@ body {
     50% { opacity: 0.5; }
 }
 
-/* Stats Bar - Redesigned */
-.stats-bar {
-    display: flex;
-    gap: 2px;
-    padding: 0;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    overflow: hidden;
+/* Node Status Panel */
+.node-status-panel {
+    overflow: visible !important;
+    position: relative;
+    z-index: 20;
 }
 
-.stat-block {
+.node-status-panel .panel-header {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
     padding: 10px 16px;
-    min-width: 80px;
-    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    overflow: visible;
 }
 
-.stat-block:last-child {
-    border-right: none;
+.node-status-panel .panel-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
 }
 
-.stat-title {
+.panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: relative;
+    overflow: visible;
+}
+
+.status-time {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
     color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 2px;
 }
 
-.stat-data {
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    font-size: 14px;
-    font-weight: 400;
+.time-item {
+    color: var(--text-dim);
+}
+
+.time-item #stat-countdown {
+    color: var(--accent-yellow);
+    font-weight: 600;
+}
+
+.time-sep {
+    color: var(--border-color);
+}
+
+.panel-config-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 6px 8px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.panel-config-btn:hover {
+    background: var(--border-color);
     color: var(--text-primary);
 }
 
-/* Network-colored stat data */
-.stat-data.stat-ipv4 { color: var(--net-ipv4); }
-.stat-data.stat-ipv6 { color: var(--net-ipv6); }
-.stat-data.stat-onion { color: var(--net-onion); }
-.stat-data.stat-i2p { color: var(--net-i2p); }
-.stat-data.stat-cjdns { color: var(--net-cjdns); }
-
-/* Update frequency - right-aligned before Next Update */
-.stat-freq {
-    margin-left: auto;
+/* Node config dropdown - positioned relative to viewport */
+.node-config-dropdown {
+    display: none;
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    z-index: 9999;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-.stat-freq .stat-data {
+.node-config-dropdown.active {
+    display: block;
+}
+
+.dropdown-row {
     display: flex;
     align-items: center;
+    gap: 8px;
+}
+
+.refresh-input {
+    width: 50px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    text-align: center;
+    padding: 5px 6px;
+}
+
+.refresh-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.dropdown-unit {
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+/* Node Status Content - Card Grid */
+.node-status-content {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    align-items: stretch;
+    overflow: visible;
+}
+
+.status-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.status-card.hidden {
+    display: none;
+}
+
+.card-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+/* Connected Card */
+.card-connected {
+    min-width: 100px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.card-value-large {
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--accent-green);
+    line-height: 1;
+}
+
+/* Networks Card */
+.card-networks {
+    flex: 1;
+    min-width: 320px;
+}
+
+.networks-grid {
+    display: flex;
     gap: 0;
 }
 
-#refresh-rate-input {
-    width: 28px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
-    color: var(--text-secondary);
-    font-family: inherit;
+.network-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 0 8px;
+    border-right: 1px solid var(--border-color);
+}
+
+.network-col:last-child {
+    border-right: none;
+}
+
+.network-col.not-configured .net-inout-row,
+.network-col.not-configured .net-score {
+    opacity: 0.5;
+}
+
+.net-name {
+    font-size: 17px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.net-name.net-ipv4 { color: var(--net-ipv4); }
+.net-name.net-ipv6 { color: var(--net-ipv6); }
+.net-name.net-onion { color: var(--net-onion); }
+.net-name.net-i2p { color: var(--net-i2p); }
+.net-name.net-cjdns { color: var(--net-cjdns); }
+
+.net-inout-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.net-inout-item {
     font-size: 13px;
-    font-weight: 400;
-    text-align: center;
-    padding: 1px 2px;
+    color: var(--text-primary);
 }
 
-#refresh-rate-input:focus {
-    outline: none;
-    border-color: var(--accent-blue);
-    color: var(--accent-blue);
+.net-inout-label {
+    color: var(--text-dim);
+    font-size: 12px;
 }
 
-#refresh-rate-input:hover {
-    border-color: var(--text-dim);
+.net-inout-value {
+    font-weight: 600;
+    margin-left: 4px;
 }
 
-.stat-timer .stat-data {
+.net-score-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-top: 6px;
+}
+
+.net-score {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.net-not-configured {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-top: 4px;
+}
+
+/* Node Info Card */
+.card-node {
+    min-width: 110px;
+}
+
+.node-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.node-info-row {
+    display: flex;
+    align-items: center;
+}
+
+.node-info-value {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.node-info-value.status-ok {
+    color: var(--accent-green);
+}
+
+.node-info-value.status-syncing {
     color: var(--accent-yellow);
 }
 
-.stat-time .stat-data {
+/* System Card */
+.card-system {
+    min-width: 90px;
+}
+
+.system-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.system-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.system-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-weight: 500;
+    width: 32px;
+}
+
+.system-value {
+    font-size: 18px;
+    font-weight: 600;
     color: var(--text-primary);
+}
+
+.system-unit {
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+/* BTC Card */
+.card-btc {
+    min-width: 130px;
+    text-align: center;
+    align-items: center;
+}
+
+.btc-price {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+}
+
+.btc-currency {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+}
+
+.btc-block {
+    font-size: 11px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border-color);
+    padding-top: 8px;
+    margin-top: auto;
+    width: 100%;
+    text-align: center;
+}
+
+.btc-block-label {
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 2px;
+}
+
+.btc-block-value {
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
 /* Panels */
@@ -625,6 +889,8 @@ th[data-col="direction"] {
     height: 520px;
     min-height: 300px;
     max-height: 900px;
+    position: relative;
+    z-index: 10;
 }
 
 .map-container {
@@ -976,15 +1242,72 @@ th[data-col="direction"] {
     font-size: 10px;
 }
 
+/* Dropdown Common Styles */
+.dropdown-section {
+    margin-bottom: 8px;
+}
+
+.dropdown-section-title {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.info-currency-select {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 8px;
+    cursor: pointer;
+}
+
+.info-currency-select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 10px 0;
+}
+
+.dropdown-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 0;
+    cursor: pointer;
+}
+
+.dropdown-checkbox:hover {
+    color: var(--text-primary);
+}
+
+.dropdown-checkbox input {
+    accent-color: var(--accent-blue);
+    cursor: pointer;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
-    .stats-bar {
+    .node-status-content {
         flex-wrap: wrap;
     }
 
-    .stat-block {
+    .status-card {
         flex: 1;
-        min-width: 70px;
+        min-width: 120px;
     }
 }
 
