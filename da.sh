@@ -591,10 +591,10 @@ run_update() {
     if git pull origin main; then
         msg_ok "Update successful!"
         echo ""
-        msg_info "Restarting dashboard with new version..."
+        msg_info "Automatically restarting with new version..."
         sleep 1
-        # Restart the script with the new version
-        exec "$0" "$@"
+        # Restart the script with the new version using absolute path
+        exec "$MBTC_DIR/da.sh"
     else
         msg_err "Update failed. Please try manually:"
         echo ""
