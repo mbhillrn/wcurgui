@@ -834,6 +834,52 @@ th[data-col="direction"] {
     color: var(--accent-blue);
 }
 
+/* Connection type badges (styled like direction badges) */
+.conn-type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* INB - Inbound (bright green) */
+.conn-type-badge.inb {
+    background: rgba(63, 185, 80, 0.2);
+    color: #3fb950;
+}
+
+/* OFR - Outbound Full Relay (bright blue) */
+.conn-type-badge.ofr {
+    background: rgba(88, 166, 255, 0.2);
+    color: #58a6ff;
+}
+
+/* BLO - Block Relay Only (darker blue) */
+.conn-type-badge.blo {
+    background: rgba(56, 139, 253, 0.2);
+    color: #388bfd;
+}
+
+/* MAN - Manual (pink) */
+.conn-type-badge.man {
+    background: rgba(247, 120, 186, 0.2);
+    color: #f778ba;
+}
+
+/* FET/FEL - Addr Fetch / Feeler (cyan) */
+.conn-type-badge.fet,
+.conn-type-badge.fel {
+    background: rgba(126, 231, 252, 0.2);
+    color: #7ee7fc;
+}
+
+/* Unknown type (gray) */
+.conn-type-badge.unknown {
+    background: rgba(110, 118, 129, 0.2);
+    color: #6e7681;
+}
+
 /* Network type colors (cell text for Net column) */
 .network-ipv4 { color: var(--net-ipv4); }
 .network-ipv6 { color: var(--net-ipv6); }

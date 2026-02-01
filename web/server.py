@@ -690,16 +690,42 @@ async def api_peers():
         services = peer.get('servicesnames', [])
         services_abbrev = ' '.join([s[0] if s else '' for s in services[:5]])
 
-        # Connection time formatted
+        # Connection time formatted - two most significant non-zero units, no spaces
         conntime = peer.get('conntime', 0)
         if conntime:
             elapsed = int(time.time()) - conntime
-            if elapsed < 3600:
-                conn_fmt = f"{elapsed // 60}m"
-            elif elapsed < 86400:
-                conn_fmt = f"{elapsed // 3600}h {(elapsed % 3600) // 60}m"
+            days = elapsed // 86400
+            hours = (elapsed % 86400) // 3600
+            minutes = (elapsed % 3600) // 60
+            seconds = elapsed % 60
+
+            if days > 0:
+                # Days + next non-zero unit
+                if hours > 0:
+                    conn_fmt = f"{days}d{hours}h"
+                elif minutes > 0:
+                    conn_fmt = f"{days}d{minutes}m"
+                elif seconds > 0:
+                    conn_fmt = f"{days}d{seconds}s"
+                else:
+                    conn_fmt = f"{days}d"
+            elif hours > 0:
+                # Hours + next non-zero unit
+                if minutes > 0:
+                    conn_fmt = f"{hours}h{minutes}m"
+                elif seconds > 0:
+                    conn_fmt = f"{hours}h{seconds}s"
+                else:
+                    conn_fmt = f"{hours}h"
+            elif minutes > 0:
+                # Minutes + seconds
+                if seconds > 0:
+                    conn_fmt = f"{minutes}m{seconds}s"
+                else:
+                    conn_fmt = f"{minutes}m"
             else:
-                conn_fmt = f"{elapsed // 86400}d {(elapsed % 86400) // 3600}h"
+                # Just seconds
+                conn_fmt = f"{seconds}s"
         else:
             conn_fmt = "-"
 

@@ -35,10 +35,10 @@ const allColumns = [
     'in_addrman'
 ];
 
-// Default visible columns in user's preferred order
+// Default visible columns in user's preferred order (id first, connection_type replaces direction)
 const defaultVisibleColumns = [
-    'network', 'conntime', 'direction', 'ip', 'port', 'subver',
-    'connection_type', 'services_abbrev',
+    'id', 'network', 'conntime', 'connection_type', 'ip', 'port', 'subver',
+    'services_abbrev',
     'city', 'regionName', 'country', 'continent', 'isp',
     'ping_ms', 'bytessent', 'bytesrecv',
     'in_addrman'
@@ -746,10 +746,10 @@ function setupColumnConfig() {
 
     if (!configBtn || !modal || !closeBtn || !checkboxContainer) return;
 
-    // Populate checkboxes
+    // Populate checkboxes - show ALL columns (not just defaults)
     function populateCheckboxes() {
         checkboxContainer.innerHTML = '';
-        defaultVisibleColumns.forEach(col => {
+        allColumns.forEach(col => {
             const label = document.createElement('label');
             label.className = 'column-checkbox';
             label.innerHTML = `
@@ -766,6 +766,10 @@ function setupColumnConfig() {
                 if (cb.checked) {
                     if (!visibleColumns.includes(col)) {
                         visibleColumns.push(col);
+                    }
+                    // Also add to columnOrder if not present (for newly enabled columns)
+                    if (!columnOrder.includes(col)) {
+                        columnOrder.push(col);
                     }
                 } else {
                     visibleColumns = visibleColumns.filter(c => c !== col);
@@ -985,18 +989,53 @@ function loadColumnPreferences() {
         const savedVisible = localStorage.getItem('mbcore_visible_columns');
         if (savedVisible) {
             visibleColumns = JSON.parse(savedVisible);
+            // Migration v2.5.0: ensure 'id' is visible and first
+            if (!visibleColumns.includes('id')) {
+                visibleColumns.unshift('id');
+            }
+            // Migration v2.5.1: ensure 'connection_type' is visible (replaces direction as default)
+            if (!visibleColumns.includes('connection_type')) {
+                // Insert after 'conntime' if possible, otherwise after 'id'
+                const conntimeIdx = visibleColumns.indexOf('conntime');
+                if (conntimeIdx !== -1) {
+                    visibleColumns.splice(conntimeIdx + 1, 0, 'connection_type');
+                } else {
+                    const idIdx = visibleColumns.indexOf('id');
+                    visibleColumns.splice(idIdx + 1, 0, 'connection_type');
+                }
+            }
         }
 
         const savedOrder = localStorage.getItem('mbcore_column_order');
         if (savedOrder) {
             columnOrder = JSON.parse(savedOrder);
-            // Ensure all default columns are in the order (in case new columns were added)
-            defaultVisibleColumns.forEach(col => {
+            // Migration v2.5.0: ensure 'id' is first in order
+            if (!columnOrder.includes('id')) {
+                columnOrder.unshift('id');
+            } else if (columnOrder[0] !== 'id') {
+                // Move 'id' to first position
+                columnOrder = columnOrder.filter(c => c !== 'id');
+                columnOrder.unshift('id');
+            }
+            // Migration v2.5.1: ensure 'connection_type' is near 'conntime'
+            if (!columnOrder.includes('connection_type')) {
+                const conntimeIdx = columnOrder.indexOf('conntime');
+                if (conntimeIdx !== -1) {
+                    columnOrder.splice(conntimeIdx + 1, 0, 'connection_type');
+                } else {
+                    columnOrder.push('connection_type');
+                }
+            }
+            // Ensure all columns (including newly added defaults) are in the order
+            allColumns.forEach(col => {
                 if (!columnOrder.includes(col)) {
                     columnOrder.push(col);
                 }
             });
         }
+
+        // Save migrated preferences
+        saveColumnPreferences();
 
         applyColumnVisibility();
 
@@ -1412,6 +1451,22 @@ function renderPeers() {
         // Network text color class for ALL columns except direction and in_addrman
         const netTextClass = `network-${peer.network}`;
 
+        // Connection type badge and tooltip
+        const connTypeAbbrev = (peer.connection_type_abbrev || '-').toUpperCase();
+        const connTypeBadgeClass = connTypeAbbrev.toLowerCase();
+        const connTypeDescriptions = {
+            'INB': 'Inbound: They connected to us (full relay)',
+            'OFR': 'Outbound Full Relay: We connected to them (transactions + blocks)',
+            'BLO': 'Block Relay Only: We connected, blocks only (no transactions)',
+            'MAN': 'Manual: Added via addnode command',
+            'FET': 'Address Fetch: Temporary connection to get addresses',
+            'FEL': 'Feeler: Temporary connection to test reachability'
+        };
+        const connTypeTooltip = connTypeDescriptions[connTypeAbbrev] || `Connection Type: ${peer.connection_type || '-'}`;
+        const connTypeBadge = connTypeAbbrev !== '-'
+            ? `<span class="conn-type-badge ${connTypeBadgeClass}">${connTypeAbbrev}</span>`
+            : '-';
+
         // Cell definitions for dynamic column ordering
         // Note: No JS truncation - CSS handles text-overflow with ellipsis
         // When column is resized wider, full text shows automatically
@@ -1433,7 +1488,7 @@ function renderPeers() {
             'bytesrecv': { class: netTextClass, title: `Bytes Received: ${peer.bytesrecv_fmt}`, content: peer.bytesrecv_fmt },
             'ping_ms': { class: netTextClass, title: `Ping: ${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}`, content: peer.ping_ms != null ? peer.ping_ms + 'ms' : '-' },
             'conntime': { class: netTextClass, title: `Connected: ${peer.conntime_fmt}`, content: peer.conntime_fmt },
-            'connection_type': { class: netTextClass, title: `Connection Type: ${peer.connection_type || '-'}`, content: peer.connection_type_abbrev || '-' },
+            'connection_type': { class: '', title: connTypeTooltip, content: connTypeBadge },
             'services_abbrev': { class: netTextClass, title: (peer.services || []).join(', '), content: peer.services_abbrev || '-' },
             'lat': { class: `${geoClass} ${netTextClass}`, title: `Latitude: ${geoDisplay.lat}`, content: geoDisplay.lat },
             'lon': { class: `${geoClass} ${netTextClass}`, title: `Longitude: ${geoDisplay.lon}`, content: geoDisplay.lon },
