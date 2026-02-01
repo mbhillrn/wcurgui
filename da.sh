@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="2.3.4"
+VERSION="2.3.5"
 GITHUB_REPO="mbhillrn/MBCore-Dashboard"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/da.sh"
 UPDATE_AVAILABLE=0
@@ -55,6 +55,12 @@ handle_ctrl_c() {
 }
 
 trap handle_ctrl_c SIGINT
+
+# Cleanup temp files on exit
+cleanup_temp() {
+    rm -f "/tmp/mbtc_update_check_$$"
+}
+trap cleanup_temp EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BANNER
@@ -522,6 +528,8 @@ firewall_helper() {
 # VERSION CHECK AND AUTO-UPDATE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+UPDATE_CHECK_FILE="/tmp/mbtc_update_check_$$"
+
 check_for_updates() {
     # Only check if curl is available and we have internet
     if ! command -v curl &>/dev/null; then
@@ -536,8 +544,6 @@ check_for_updates() {
         return 1
     fi
 
-    LATEST_VERSION="$remote_version"
-
     # Compare versions (simple string comparison works for semver)
     if [[ "$remote_version" != "$VERSION" ]]; then
         # Check if remote is newer (compare major.minor.patch)
@@ -549,7 +555,8 @@ check_for_updates() {
             local lp=${local_parts[$i]:-0}
             local rp=${remote_parts[$i]:-0}
             if (( rp > lp )); then
-                UPDATE_AVAILABLE=1
+                # Write to temp file so parent can read it (subshell can't set parent vars)
+                echo "$remote_version" > "$UPDATE_CHECK_FILE"
                 return 0
             elif (( rp < lp )); then
                 return 0
@@ -558,6 +565,15 @@ check_for_updates() {
     fi
 
     return 0
+}
+
+# Read update check results from background process
+read_update_check() {
+    if [[ -f "$UPDATE_CHECK_FILE" ]]; then
+        LATEST_VERSION=$(cat "$UPDATE_CHECK_FILE")
+        UPDATE_AVAILABLE=1
+        rm -f "$UPDATE_CHECK_FILE"
+    fi
 }
 
 show_update_banner() {
@@ -680,6 +696,26 @@ main() {
 
     # Wait for update check to complete (with timeout)
     wait "$update_pid" 2>/dev/null || true
+
+    # Read update check results from background process
+    read_update_check
+
+    # If update available, prompt the user
+    if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
+        echo ""
+        echo -e "  ${T_WARN}═══════════════════════════════════════════════════════════${RST}"
+        echo -e "  ${T_WARN}⚡ UPDATE AVAILABLE!${RST}"
+        echo -e "  ${T_DIM}Your version:${RST}   v${VERSION}"
+        echo -e "  ${T_SUCCESS}Latest version:${RST} v${LATEST_VERSION}"
+        echo -e "  ${T_WARN}═══════════════════════════════════════════════════════════${RST}"
+        echo ""
+        if prompt_yn "Would you like to update now?"; then
+            run_update
+        else
+            msg_info "You can update later by pressing 'u' in the menu"
+            sleep 1
+        fi
+    fi
 
     # Main loop
     while true; do
