@@ -19,7 +19,7 @@
     --net-ipv4: #e3b341;
     --net-ipv6: #f0883e;
     --net-onion: #f07178;
-    --net-i2p: #79c0ff;
+    --net-i2p: #6830e6;
     --net-cjdns: #d2a8ff;
 }
 
@@ -891,14 +891,14 @@ th[data-col="direction"] {
 .network-row-ipv4 { background: rgba(227, 179, 65, 0.08); }
 .network-row-ipv6 { background: rgba(240, 136, 62, 0.08); }
 .network-row-onion { background: rgba(240, 113, 120, 0.08); }
-.network-row-i2p { background: rgba(121, 192, 255, 0.08); }
+.network-row-i2p { background: rgba(104, 48, 230, 0.08); }
 .network-row-cjdns { background: rgba(210, 168, 255, 0.08); }
 
 /* Row hover overrides */
 .peer-table tbody tr.network-row-ipv4:hover { background: rgba(227, 179, 65, 0.15); }
 .peer-table tbody tr.network-row-ipv6:hover { background: rgba(240, 136, 62, 0.15); }
 .peer-table tbody tr.network-row-onion:hover { background: rgba(240, 113, 120, 0.15); }
-.peer-table tbody tr.network-row-i2p:hover { background: rgba(121, 192, 255, 0.15); }
+.peer-table tbody tr.network-row-i2p:hover { background: rgba(104, 48, 230, 0.15); }
 .peer-table tbody tr.network-row-cjdns:hover { background: rgba(210, 168, 255, 0.15); }
 
 /* Cells that should stay white text (not network colored) */
@@ -1564,13 +1564,24 @@ th[data-col="direction"] {
     color: var(--text-primary);
 }
 
-.peer-action-btn-warning {
-    color: var(--accent-yellow);
+/* Connect Peer button - blue like OFR */
+.peer-action-btn-connect {
+    color: #58a6ff;
 }
 
-.peer-action-btn-warning:hover {
-    background: rgba(210, 153, 34, 0.15);
-    border-color: var(--accent-yellow);
+.peer-action-btn-connect:hover {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: #58a6ff;
+}
+
+/* Disconnect Peer button - pink like MAN */
+.peer-action-btn-disconnect {
+    color: #f778ba;
+}
+
+.peer-action-btn-disconnect:hover {
+    background: rgba(247, 120, 186, 0.15);
+    border-color: #f778ba;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -1597,7 +1608,7 @@ th[data-col="direction"] {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--accent-yellow);
+    color: var(--accent-red);
     font-weight: 600;
     font-size: 12px;
     margin-bottom: 4px;
@@ -1605,12 +1616,14 @@ th[data-col="direction"] {
 
 .warning-icon {
     font-size: 16px;
+    color: var(--accent-red);
 }
 
 .disconnect-subtext {
-    color: var(--text-dim);
+    color: var(--accent-red);
     font-size: 11px;
     margin-bottom: 8px;
+    opacity: 0.8;
 }
 
 .disconnect-divider {
@@ -1700,7 +1713,7 @@ th[data-col="direction"] {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    color: var(--text-secondary);
+    color: var(--accent-blue);
     font-family: inherit;
     font-size: 11px;
     padding: 6px 10px;
@@ -1709,7 +1722,8 @@ th[data-col="direction"] {
 }
 
 .disconnect-action-btn:hover {
-    background: var(--border-color);
+    background: rgba(88, 166, 255, 0.15);
+    border-color: var(--accent-blue);
     color: var(--text-primary);
 }
 
@@ -1753,34 +1767,44 @@ th[data-col="direction"] {
 }
 
 .connect-instructions p {
-    color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 14px;
     margin-bottom: 6px;
+}
+
+.connect-main-text {
+    color: var(--text-primary);
+}
+
+.connect-main-text strong {
+    color: var(--accent-yellow);
 }
 
 .connect-note {
     color: var(--text-dim) !important;
-    font-size: 11px !important;
+    font-size: 12px !important;
     font-style: italic;
 }
 
+/* Examples box - orange/brown styling */
 .connect-examples {
-    background: var(--bg-tertiary);
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid rgba(210, 153, 34, 0.3);
     border-radius: 4px;
-    padding: 12px;
-    margin-bottom: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
 }
 
 .connect-examples-title {
-    color: var(--text-dim);
-    font-size: 11px;
-    margin-bottom: 8px;
+    color: var(--accent-yellow);
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 10px;
 }
 
 .connect-example {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 6px;
     font-family: 'SF Mono', 'Consolas', monospace;
 }
 
@@ -1789,30 +1813,30 @@ th[data-col="direction"] {
 }
 
 .example-type {
-    color: var(--text-dim);
+    color: var(--text-secondary);
     display: inline-block;
     min-width: 55px;
 }
 
-.connect-i2p-note {
-    background: rgba(210, 153, 34, 0.1);
-    border: 1px solid rgba(210, 153, 34, 0.3);
-    border-radius: 4px;
-    padding: 10px 12px;
-    margin-bottom: 16px;
-    font-size: 12px;
-    color: var(--text-secondary);
+.connect-example-divider {
+    height: 1px;
+    background: rgba(210, 153, 34, 0.3);
+    margin: 10px 0;
 }
 
-.connect-i2p-note strong {
+.connect-i2p-inline {
+    color: var(--text-primary);
+}
+
+.example-type-i2p {
+    color: #6830e6;
+    font-weight: 600;
+}
+
+.i2p-required {
     color: var(--accent-yellow);
-}
-
-.connect-i2p-note code {
-    background: var(--bg-tertiary);
-    padding: 1px 4px;
-    border-radius: 2px;
     font-size: 11px;
+    margin-left: 8px;
 }
 
 .connect-input-row {
@@ -1823,25 +1847,27 @@ th[data-col="direction"] {
 }
 
 .connect-label {
-    color: var(--text-secondary);
-    font-size: 13px;
-    min-width: 60px;
+    color: var(--text-primary);
+    font-size: 14px;
+    min-width: 100px;
+    font-weight: 500;
 }
 
 .connect-input {
     flex: 1;
-    background: var(--bg-tertiary);
+    background: #2d333b;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     color: var(--text-primary);
     font-family: 'SF Mono', 'Consolas', monospace;
-    font-size: 13px;
-    padding: 8px 12px;
+    font-size: 14px;
+    padding: 10px 12px;
 }
 
 .connect-input:focus {
     outline: none;
     border-color: var(--accent-blue);
+    background: #363d47;
 }
 
 .connect-actions {
@@ -1856,21 +1882,27 @@ th[data-col="direction"] {
     border-radius: 4px;
     color: #000;
     font-family: inherit;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
-    padding: 8px 20px;
+    padding: 10px 24px;
     cursor: pointer;
     transition: all 0.2s;
+    min-width: 120px;
 }
 
 .connect-btn:hover {
     background: #4cc75e;
 }
 
+.connect-btn:disabled {
+    background: var(--text-dim);
+    cursor: not-allowed;
+}
+
 .connect-result {
     padding: 10px 12px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 13px;
     display: none;
     margin-bottom: 14px;
 }
@@ -1895,38 +1927,75 @@ th[data-col="direction"] {
     margin: 16px 0;
 }
 
+/* Permanent add section - orange/brown styling */
 .connect-permanent {
-    background: var(--bg-tertiary);
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid rgba(210, 153, 34, 0.3);
     border-radius: 4px;
-    padding: 12px;
+    padding: 14px;
 }
 
 .connect-permanent-title {
-    color: var(--text-dim);
-    font-size: 11px;
-    margin-bottom: 8px;
+    color: var(--accent-yellow);
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 10px;
+}
+
+.connect-cmd-wrapper {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin-bottom: 10px;
 }
 
 .connect-permanent-cmd {
+    flex: 1;
     font-family: 'SF Mono', 'Consolas', monospace;
-    font-size: 11px;
-    color: var(--text-secondary);
+    font-size: 12px;
+    color: var(--text-primary);
     background: var(--bg-secondary);
-    padding: 8px 10px;
-    border-radius: 4px;
-    margin-bottom: 8px;
+    padding: 10px 12px;
+    border-radius: 4px 0 0 4px;
     word-break: break-all;
+    border: 1px solid var(--border-color);
+    border-right: none;
+}
+
+.copy-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 0 4px 4px 0;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.copy-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.copy-btn.copied {
+    background: rgba(63, 185, 80, 0.2);
+    color: var(--accent-green);
+    border-color: var(--accent-green);
 }
 
 .connect-permanent-note {
-    color: var(--text-dim);
-    font-size: 10px;
+    color: var(--text-secondary);
+    font-size: 11px;
 }
 
 .connect-permanent-note code {
     background: var(--bg-secondary);
-    padding: 1px 4px;
-    border-radius: 2px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text-primary);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════

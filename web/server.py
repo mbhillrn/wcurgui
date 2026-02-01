@@ -1370,10 +1370,10 @@ def main():
     print("")
     url_lan = f"http://{lan_ip}:{port}"
     url_local = f"http://127.0.0.1:{port}"
-    print(f"  {C_BOLD}{C_GREEN}Scenario 1{C_RESET} {C_WHITE}- Local Machine Only:{C_RESET}")
+    print(f"  {C_BOLD}{C_GREEN}Scenario 1{C_RESET} {C_WHITE}- Node/MBCore on same machine you will be opening your browser from:{C_RESET}")
     print(f"      {C_CYAN}{url_local}{C_RESET}")
     print("")
-    print(f"  {C_BOLD}{C_GREEN}Scenario 2{C_RESET} {C_WHITE}- From Another Device on Your Network:{C_RESET}")
+    print(f"  {C_BOLD}{C_GREEN}Scenario 2{C_RESET} {C_WHITE}- You are opening your browser from another machine on the network:{C_RESET}")
     print(f"    {C_YELLOW}Option A{C_RESET} {C_WHITE}- Direct LAN Access {C_DIM}(may need firewall configured - {C_RESET}{C_RED}SEE README{C_RESET}{C_DIM}){C_RESET}")
     print(f"      {C_CYAN}{url_lan}{C_RESET}  {C_DIM}<- Your node's detected IP{C_RESET}")
     print("")

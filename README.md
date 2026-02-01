@@ -5,6 +5,8 @@ A lightweight monitoring tool for Bitcoin Core nodes that visualizes peer connec
 - Interactive world map of YOUR node's actual connected peers
 - Zero config - just point at bitcoind
 - All 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS)
+- Connect, disconnect, and ban peers directly from the dashboard
+- Mempool info with real-time stats
 - No accounts, no external services, runs locally
 - Lightweight single script install
 - Real-time with SSE updates

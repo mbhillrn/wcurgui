@@ -645,7 +645,7 @@ const NETWORK_COLORS = {
     'ipv4':  '#d29922', // yellow
     'ipv6':  '#e69500', // orange
     'onion': '#c74e4e', // mild red
-    'i2p':   '#58a6ff', // light blue
+    'i2p':   '#6830e6', // deep purple
     'cjdns': '#d296c7', // light pink
     'unavailable': '#6e7681' // gray
 };
@@ -2398,13 +2398,24 @@ function updatePermanentAddCommand() {
     const cmdEl = document.getElementById('connect-permanent-cmd');
     if (!cmdEl || !cliInfo) return;
 
-    const baseCmd = cliInfo.base_command || 'bitcoin-cli';
-    cmdEl.textContent = `${baseCmd} addnode "<address>" add`;
+    // Build command without the full path (just bitcoin-cli)
+    let cmd = 'bitcoin-cli';
+    if (cliInfo.datadir) {
+        cmd += ` -datadir=${cliInfo.datadir}`;
+    }
+    if (cliInfo.conf) {
+        cmd += ` -conf=${cliInfo.conf}`;
+    }
+    cmd += ' addnode "<address>" add';
+    cmdEl.textContent = cmd;
 }
 
 // Connect to a peer
 async function connectPeer(address) {
     const resultDiv = document.getElementById('connect-result');
+    const connectBtn = document.getElementById('connect-confirm-btn');
+    const originalText = connectBtn.textContent;
+
     resultDiv.className = 'connect-result';
     resultDiv.style.display = 'none';
 
@@ -2414,6 +2425,10 @@ async function connectPeer(address) {
         resultDiv.style.display = 'block';
         return;
     }
+
+    // Show "Attempting..." state
+    connectBtn.textContent = 'Attempting...';
+    connectBtn.disabled = true;
 
     try {
         const response = await fetch(`${API_BASE}/api/peer/connect`, {
@@ -2436,6 +2451,10 @@ async function connectPeer(address) {
         resultDiv.className = 'connect-result error';
         resultDiv.textContent = `Error: ${error.message}`;
         resultDiv.style.display = 'block';
+    } finally {
+        // Restore button state
+        connectBtn.textContent = originalText;
+        connectBtn.disabled = false;
     }
 }
 
@@ -2566,5 +2585,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 connectPeer(addressInput.value);
             }
         });
+
+        // Copy to clipboard button
+        const copyBtn = document.getElementById('copy-cmd-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                const cmdEl = document.getElementById('connect-permanent-cmd');
+                if (cmdEl) {
+                    navigator.clipboard.writeText(cmdEl.textContent).then(() => {
+                        copyBtn.classList.add('copied');
+                        setTimeout(() => {
+                            copyBtn.classList.remove('copied');
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Failed to copy:', err);
+                    });
+                }
+            });
+        }
     }
 });

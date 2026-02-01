@@ -254,8 +254,8 @@
                 </div>
                 <div class="panel-controls">
                     <span class="peer-count" id="peer-count">0 peers</span>
-                    <button class="peer-action-btn" id="connect-peer-btn" title="Connect to a peer">Connect Peer</button>
-                    <button class="peer-action-btn peer-action-btn-warning" id="disconnect-peer-btn" title="Disconnect or ban a peer">Disconnect Peer</button>
+                    <button class="peer-action-btn peer-action-btn-connect" id="connect-peer-btn" title="Connect to a peer">Connect Peer</button>
+                    <button class="peer-action-btn peer-action-btn-disconnect" id="disconnect-peer-btn" title="Disconnect or ban a peer">Disconnect Peer</button>
                     <!-- Disconnect Peer Dropdown -->
                     <div class="disconnect-dropdown" id="disconnect-dropdown">
                         <div class="disconnect-warning">
@@ -370,7 +370,7 @@
                 </div>
                 <div class="modal-body modal-body-single">
                     <div class="connect-instructions">
-                        <p>Enter the peer's listening address. If you omit the port, we'll use <strong>8333</strong> for IPv4/IPv6/Tor.</p>
+                        <p class="connect-main-text">Enter the peer's listening address. If you omit the port, we'll use <strong>8333</strong> for IPv4/IPv6/Tor.</p>
                         <p class="connect-note">Note: This may differ from what appears in the Connected Peers table.</p>
                     </div>
                     <div class="connect-examples">
@@ -379,13 +379,11 @@
                         <div class="connect-example"><span class="example-type">IPv6:</span> [2001:db8::1]</div>
                         <div class="connect-example"><span class="example-type">Tor:</span> abc...xyz.onion</div>
                         <div class="connect-example"><span class="example-type">CJDNS:</span> [fc00::1]</div>
-                    </div>
-                    <div class="connect-i2p-note">
-                        <strong>I2P:</strong> You must specify the port (<code>:0</code>)<br>
-                        Example: <code>abc...xyz.b32.i2p:0</code>
+                        <div class="connect-example-divider"></div>
+                        <div class="connect-example connect-i2p-inline"><span class="example-type example-type-i2p">I2P:</span> abc...xyz.b32.i2p:0 <span class="i2p-required">(port :0 required)</span></div>
                     </div>
                     <div class="connect-input-row">
-                        <label class="connect-label">Address:</label>
+                        <label class="connect-label">Enter Address:</label>
                         <input type="text" id="connect-peer-address" class="connect-input" placeholder="Enter address">
                     </div>
                     <div class="connect-actions">
@@ -395,7 +393,15 @@
                     <div class="connect-divider"></div>
                     <div class="connect-permanent">
                         <div class="connect-permanent-title">To add permanently:</div>
-                        <div class="connect-permanent-cmd" id="connect-permanent-cmd">Loading CLI info...</div>
+                        <div class="connect-cmd-wrapper">
+                            <div class="connect-permanent-cmd" id="connect-permanent-cmd">Loading CLI info...</div>
+                            <button class="copy-btn" id="copy-cmd-btn" title="Copy to clipboard">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/>
+                                    <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/>
+                                </svg>
+                            </button>
+                        </div>
                         <div class="connect-permanent-note">Or add <code>addnode=&lt;address&gt;</code> to your bitcoin.conf</div>
                     </div>
                 </div>
