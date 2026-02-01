@@ -889,6 +889,8 @@ th[data-col="direction"] {
     height: 520px;
     min-height: 300px;
     max-height: 900px;
+    position: relative;
+    z-index: 10;
 }
 
 .map-container {
