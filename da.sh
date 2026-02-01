@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="2.2.4"
+VERSION="2.3.0"
 GITHUB_REPO="mbhillrn/MBCore-Dashboard"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/da.sh"
 UPDATE_AVAILABLE=0

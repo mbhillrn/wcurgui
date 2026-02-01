@@ -1674,4 +1674,352 @@ window.addEventListener('beforeunload', () => {
     if (refreshTimer) {
         clearInterval(refreshTimer);
     }
+    if (infoTimer) {
+        clearInterval(infoTimer);
+    }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFO PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let infoUpdateInterval = 60000; // 60 seconds default
+let infoCurrency = 'USD';
+let infoTimer = null;
+let infoPanelCollapsed = false;
+let infoVisibility = {
+    btc: true,
+    block: true,
+    chain: true,
+    scores: true,
+    system: true
+};
+
+// Initialize info panel on DOM load
+document.addEventListener('DOMContentLoaded', () => {
+    loadInfoPanelPreferences();
+    setupInfoPanelControls();
+    fetchInfoPanel();
+    startInfoPanelTimer();
+});
+
+// Load info panel preferences from localStorage
+function loadInfoPanelPreferences() {
+    try {
+        // Currency
+        const savedCurrency = localStorage.getItem('mbcore_info_currency');
+        if (savedCurrency) {
+            infoCurrency = savedCurrency;
+            const select = document.getElementById('info-currency-select');
+            if (select) select.value = infoCurrency;
+        }
+
+        // Update interval
+        const savedInterval = localStorage.getItem('mbcore_info_interval');
+        if (savedInterval) {
+            infoUpdateInterval = parseInt(savedInterval, 10) * 1000;
+            const select = document.getElementById('info-update-select');
+            if (select) select.value = (infoUpdateInterval / 1000).toString();
+        }
+
+        // Visibility settings
+        const savedVisibility = localStorage.getItem('mbcore_info_visibility');
+        if (savedVisibility) {
+            infoVisibility = JSON.parse(savedVisibility);
+        }
+        applyInfoVisibility();
+
+        // Collapsed state
+        const savedCollapsed = localStorage.getItem('mbcore_info_collapsed');
+        if (savedCollapsed === 'true') {
+            infoPanelCollapsed = true;
+            const panel = document.getElementById('info-panel');
+            if (panel) panel.classList.add('collapsed');
+            const checkbox = document.getElementById('info-panel-collapse');
+            if (checkbox) checkbox.checked = true;
+        }
+    } catch (e) {
+        console.warn('Could not load info panel preferences:', e);
+    }
+}
+
+// Setup info panel controls
+function setupInfoPanelControls() {
+    const configBtn = document.getElementById('info-config-btn');
+    const dropdown = document.getElementById('info-config-dropdown');
+
+    // Toggle dropdown
+    if (configBtn && dropdown) {
+        configBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('active');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            dropdown.classList.remove('active');
+        });
+
+        dropdown.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+
+    // Currency select
+    const currencySelect = document.getElementById('info-currency-select');
+    if (currencySelect) {
+        currencySelect.addEventListener('change', () => {
+            infoCurrency = currencySelect.value;
+            localStorage.setItem('mbcore_info_currency', infoCurrency);
+            fetchInfoPanel(); // Refresh immediately
+        });
+    }
+
+    // Update interval select
+    const updateSelect = document.getElementById('info-update-select');
+    if (updateSelect) {
+        updateSelect.addEventListener('change', () => {
+            infoUpdateInterval = parseInt(updateSelect.value, 10) * 1000;
+            localStorage.setItem('mbcore_info_interval', updateSelect.value);
+            // Restart timer with new interval
+            if (infoTimer) clearInterval(infoTimer);
+            startInfoPanelTimer();
+        });
+    }
+
+    // Visibility checkboxes
+    const visibilityMap = {
+        'info-show-btc': 'btc',
+        'info-show-block': 'block',
+        'info-show-chain': 'chain',
+        'info-show-scores': 'scores',
+        'info-show-system': 'system'
+    };
+
+    Object.entries(visibilityMap).forEach(([id, key]) => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.checked = infoVisibility[key];
+            checkbox.addEventListener('change', () => {
+                infoVisibility[key] = checkbox.checked;
+                localStorage.setItem('mbcore_info_visibility', JSON.stringify(infoVisibility));
+                applyInfoVisibility();
+            });
+        }
+    });
+
+    // Collapse checkbox
+    const collapseCheckbox = document.getElementById('info-panel-collapse');
+    if (collapseCheckbox) {
+        collapseCheckbox.addEventListener('change', () => {
+            infoPanelCollapsed = collapseCheckbox.checked;
+            localStorage.setItem('mbcore_info_collapsed', infoPanelCollapsed.toString());
+            const panel = document.getElementById('info-panel');
+            if (panel) {
+                if (infoPanelCollapsed) {
+                    panel.classList.add('collapsed');
+                } else {
+                    panel.classList.remove('collapsed');
+                }
+            }
+        });
+    }
+}
+
+// Apply visibility settings to info items
+function applyInfoVisibility() {
+    const items = {
+        'btc': 'info-btc-wrap',
+        'block': 'info-block-wrap',
+        'chain': 'info-chain-wrap',
+        'scores': 'info-scores-wrap',
+        'system': 'info-system-wrap'
+    };
+
+    // Get all separators
+    const seps = document.querySelectorAll('.info-panel-content .info-sep');
+
+    Object.entries(items).forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (infoVisibility[key]) {
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+    });
+
+    // Update separators - hide them between hidden items
+    updateInfoSeparators();
+}
+
+// Update separator visibility
+function updateInfoSeparators() {
+    const content = document.getElementById('info-panel-content');
+    if (!content) return;
+
+    const items = content.querySelectorAll('.info-item');
+    const seps = content.querySelectorAll('.info-sep');
+
+    let lastVisibleIndex = -1;
+    items.forEach((item, index) => {
+        if (!item.classList.contains('hidden')) {
+            lastVisibleIndex = index;
+        }
+    });
+
+    // Show separator after each visible item except the last one
+    let visibleCount = 0;
+    items.forEach((item, index) => {
+        if (!item.classList.contains('hidden')) {
+            visibleCount++;
+        }
+        // Each separator follows an item
+        if (seps[index]) {
+            if (item.classList.contains('hidden') || index === lastVisibleIndex) {
+                seps[index].classList.add('hidden');
+            } else {
+                seps[index].classList.remove('hidden');
+            }
+        }
+    });
+}
+
+// Start info panel update timer
+function startInfoPanelTimer() {
+    infoTimer = setInterval(() => {
+        fetchInfoPanel();
+    }, infoUpdateInterval);
+}
+
+// Fetch info panel data from API
+async function fetchInfoPanel() {
+    try {
+        const response = await fetch(`${API_BASE}/api/info?currency=${infoCurrency}`);
+        if (!response.ok) throw new Error('Failed to fetch info');
+
+        const data = await response.json();
+        updateInfoPanel(data);
+    } catch (error) {
+        console.error('Error fetching info panel:', error);
+    }
+}
+
+// Format price with appropriate decimal places
+function formatPrice(priceStr, currency) {
+    if (!priceStr) return '-';
+
+    const price = parseFloat(priceStr);
+    if (isNaN(price)) return '-';
+
+    // Currencies that typically don't use decimals
+    const noDecimalCurrencies = ['JPY', 'KRW'];
+
+    if (noDecimalCurrencies.includes(currency)) {
+        return Math.round(price).toLocaleString();
+    }
+
+    // If the price has more than 2 decimal places, show up to 4
+    // Otherwise show 2
+    const decimalPart = priceStr.split('.')[1] || '';
+    if (decimalPart.length > 2) {
+        // Show up to 4 decimals, but trim trailing zeros
+        const formatted = price.toFixed(4);
+        return parseFloat(formatted).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 4
+        });
+    } else {
+        return price.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+}
+
+// Format block time to local time string
+function formatBlockTime(timestamp) {
+    if (!timestamp) return '-';
+
+    const date = new Date(timestamp * 1000);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'p' : 'a';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 becomes 12
+
+    return `${month}/${day} ${hours}:${minutes}${ampm}`;
+}
+
+// Update info panel with data
+function updateInfoPanel(data) {
+    // BTC Price
+    const priceEl = document.getElementById('info-btc-price');
+    const currencyEl = document.getElementById('info-btc-currency');
+    if (priceEl) {
+        priceEl.textContent = formatPrice(data.btc_price, data.btc_currency);
+    }
+    if (currencyEl) {
+        currencyEl.textContent = data.btc_currency || 'USD';
+    }
+
+    // Last Block
+    const blockEl = document.getElementById('info-last-block');
+    if (blockEl && data.last_block) {
+        const timeStr = formatBlockTime(data.last_block.time);
+        blockEl.textContent = `${timeStr} (${data.last_block.height.toLocaleString()})`;
+    }
+
+    // Blockchain Stats
+    const sizeEl = document.getElementById('info-chain-size');
+    const statusEl = document.getElementById('info-chain-status');
+    if (sizeEl && data.blockchain) {
+        sizeEl.textContent = `${data.blockchain.size_gb}GB`;
+    }
+    if (statusEl && data.blockchain) {
+        const parts = [];
+        parts.push(data.blockchain.pruned ? 'Pruned' : 'Full Node');
+        if (data.blockchain.indexed) parts.push('Indexed');
+
+        const upToDate = !data.blockchain.ibd;
+        const statusClass = upToDate ? 'info-uptodate' : 'info-syncing';
+        const statusText = upToDate ? 'Up to date' : 'Syncing...';
+
+        statusEl.innerHTML = `(${parts.join(', ')}) <span class="${statusClass}">${statusText}</span>`;
+    }
+
+    // Network Scores
+    const ipv4El = document.getElementById('info-score-ipv4');
+    const ipv6El = document.getElementById('info-score-ipv6');
+    if (data.network_scores) {
+        if (ipv4El) {
+            ipv4El.textContent = data.network_scores.ipv4 !== null
+                ? data.network_scores.ipv4.toLocaleString()
+                : '-';
+        }
+        if (ipv6El) {
+            ipv6El.textContent = data.network_scores.ipv6 !== null
+                ? data.network_scores.ipv6.toLocaleString()
+                : '-';
+        }
+    }
+
+    // System Stats
+    const cpuEl = document.getElementById('info-cpu');
+    const memEl = document.getElementById('info-mem');
+    if (data.system_stats) {
+        if (cpuEl) {
+            cpuEl.textContent = data.system_stats.cpu_pct !== null
+                ? data.system_stats.cpu_pct
+                : '-';
+        }
+        if (memEl) {
+            memEl.textContent = data.system_stats.mem_pct !== null
+                ? data.system_stats.mem_pct
+                : '-';
+        }
+    }
+}

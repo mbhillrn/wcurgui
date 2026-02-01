@@ -976,6 +976,223 @@ th[data-col="direction"] {
     font-size: 10px;
 }
 
+/* Info Panel */
+.info-panel {
+    padding: 0;
+    min-height: 40px;
+}
+
+.info-panel.collapsed {
+    min-height: 32px;
+}
+
+.info-panel.collapsed .info-panel-content {
+    display: none;
+}
+
+.info-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    min-height: 40px;
+}
+
+.info-panel-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.info-item.hidden {
+    display: none;
+}
+
+.info-label {
+    color: var(--text-dim);
+    font-weight: 500;
+}
+
+.info-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.info-currency {
+    color: var(--text-dim);
+    font-size: 11px;
+}
+
+.info-status {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.info-sep {
+    color: var(--border-color);
+    font-size: 12px;
+}
+
+.info-sep.hidden {
+    display: none;
+}
+
+/* Network score colors */
+.score-label {
+    font-weight: 500;
+}
+
+.score-label.score-ipv4 {
+    color: var(--net-ipv4);
+}
+
+.score-label.score-ipv6 {
+    color: var(--net-ipv6);
+}
+
+.info-score-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+}
+
+/* Info panel config button */
+.info-panel-config {
+    position: relative;
+    margin-left: 12px;
+}
+
+.info-config-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 5px 7px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.info-config-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Info config dropdown */
+.info-config-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px;
+    z-index: 100;
+    min-width: 160px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.info-config-dropdown.active {
+    display: block;
+}
+
+.dropdown-section {
+    margin-bottom: 8px;
+}
+
+.dropdown-section-title {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.info-currency-select,
+.info-update-select {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 8px;
+    cursor: pointer;
+}
+
+.info-currency-select:focus,
+.info-update-select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 10px 0;
+}
+
+.dropdown-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 0;
+    cursor: pointer;
+}
+
+.dropdown-checkbox:hover {
+    color: var(--text-primary);
+}
+
+.dropdown-checkbox input {
+    accent-color: var(--accent-blue);
+    cursor: pointer;
+}
+
+.dropdown-collapse {
+    color: var(--accent-yellow);
+    font-weight: 500;
+}
+
+/* BTC price highlight */
+.info-btc .info-value {
+    color: var(--accent-yellow);
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+}
+
+/* System stats coloring */
+.info-system .info-value {
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+}
+
+/* Up to date indicator */
+.info-uptodate {
+    color: var(--accent-green);
+}
+
+.info-syncing {
+    color: var(--accent-yellow);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-bar {

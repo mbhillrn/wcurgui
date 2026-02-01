@@ -13,7 +13,7 @@
         <!-- Header -->
         <header class="header">
             <div class="header-title">
-                <h1 class="logo-text">MBCore Dashboard <span class="version">v2.2.2</span></h1>
+                <h1 class="logo-text">MBCore Dashboard <span class="version">v2.3.0</span></h1>
                 <span class="subtitle">Peer info, map, and tools for Bitcoin Core</span>
                 <span class="credits">Created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
             </div>
@@ -73,6 +73,112 @@
             <div class="stat-block stat-time">
                 <span class="stat-title">Local Time</span>
                 <span class="stat-data" id="stat-localtime">--:--:--</span>
+            </div>
+        </div>
+
+        <!-- Info Panel - Collapsible -->
+        <div class="panel info-panel" id="info-panel">
+            <div class="info-panel-header">
+                <div class="info-panel-content" id="info-panel-content">
+                    <!-- BTC Price -->
+                    <div class="info-item info-btc" id="info-btc-wrap">
+                        <span class="info-label">BTC:</span>
+                        <span class="info-value" id="info-btc-price">-</span>
+                        <span class="info-currency" id="info-btc-currency">USD</span>
+                    </div>
+                    <div class="info-sep">|</div>
+                    <!-- Last Block -->
+                    <div class="info-item info-block" id="info-block-wrap">
+                        <span class="info-label">Last Block:</span>
+                        <span class="info-value" id="info-last-block">-</span>
+                    </div>
+                    <div class="info-sep">|</div>
+                    <!-- Blockchain Size -->
+                    <div class="info-item info-chain" id="info-chain-wrap">
+                        <span class="info-label">Blockchain:</span>
+                        <span class="info-value" id="info-chain-size">-</span>
+                        <span class="info-status" id="info-chain-status"></span>
+                    </div>
+                    <div class="info-sep">|</div>
+                    <!-- Network Scores -->
+                    <div class="info-item info-scores" id="info-scores-wrap">
+                        <span class="info-label">Network Scores:</span>
+                        <span class="info-score-item">
+                            <span class="score-label score-ipv4">IPv4:</span>
+                            <span class="info-value" id="info-score-ipv4">-</span>
+                        </span>
+                        <span class="info-score-item">
+                            <span class="score-label score-ipv6">IPv6:</span>
+                            <span class="info-value" id="info-score-ipv6">-</span>
+                        </span>
+                    </div>
+                    <div class="info-sep">|</div>
+                    <!-- System Stats -->
+                    <div class="info-item info-system" id="info-system-wrap">
+                        <span class="info-label">System:</span>
+                        <span class="info-value">CPU <span id="info-cpu">-</span>%</span>
+                        <span class="info-value">MEM <span id="info-mem">-</span>%</span>
+                    </div>
+                </div>
+                <!-- Config Button -->
+                <div class="info-panel-config">
+                    <button class="info-config-btn" id="info-config-btn" title="Configure info panel">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                        </svg>
+                    </button>
+                    <!-- Settings Dropdown -->
+                    <div class="info-config-dropdown" id="info-config-dropdown">
+                        <div class="dropdown-section">
+                            <span class="dropdown-section-title">Currency</span>
+                            <select id="info-currency-select" class="info-currency-select">
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="GBP">GBP</option>
+                                <option value="JPY">JPY</option>
+                                <option value="CHF">CHF</option>
+                                <option value="CAD">CAD</option>
+                                <option value="AUD">AUD</option>
+                                <option value="CNY">CNY</option>
+                                <option value="HKD">HKD</option>
+                                <option value="SGD">SGD</option>
+                            </select>
+                        </div>
+                        <div class="dropdown-section">
+                            <span class="dropdown-section-title">Update Interval</span>
+                            <select id="info-update-select" class="info-update-select">
+                                <option value="30">30s</option>
+                                <option value="60" selected>1m</option>
+                                <option value="120">2m</option>
+                                <option value="300">5m</option>
+                            </select>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-section">
+                            <span class="dropdown-section-title">Show/Hide</span>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-btc" checked> BTC Price
+                            </label>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-block" checked> Last Block
+                            </label>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-chain" checked> Blockchain
+                            </label>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-scores" checked> Network Scores
+                            </label>
+                            <label class="dropdown-checkbox">
+                                <input type="checkbox" id="info-show-system" checked> System Stats
+                            </label>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <label class="dropdown-checkbox dropdown-collapse">
+                            <input type="checkbox" id="info-panel-collapse"> Collapse Panel
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -235,7 +341,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <span>MBCore Dashboard v2.2.2 | created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
+            <span>MBCore Dashboard v2.3.0 | created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
             <span id="refresh-timer">Refreshing in 10s</span>
         </footer>
     </div>
