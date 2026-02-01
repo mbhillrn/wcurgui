@@ -1116,7 +1116,7 @@ def main():
     print(f"  {C_BOLD}{C_YELLOW}** FOLLOW THESE INSTRUCTIONS TO GET TO THE DASHBOARD! **{C_RESET}")
     print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
     print("")
-    print(f"  {C_WHITE}To enter the dashboard, visit {C_DIM}(First run? See {C_RED}README/QUICKSTART{C_DIM}){C_RESET}")
+    print(f"  {C_WHITE}To enter the dashboard, visit {C_DIM}(First run? See {C_RESET}{C_RED}README/QUICKSTART{C_RESET}{C_DIM}){C_RESET}")
     print("")
     url_lan = f"http://{lan_ip}:{port}"
     url_local = f"http://127.0.0.1:{port}"
@@ -1124,10 +1124,10 @@ def main():
     print(f"      {C_CYAN}{url_local}{C_RESET}")
     print("")
     print(f"  {C_BOLD}{C_GREEN}Scenario 2{C_RESET} {C_WHITE}- From Another Device on Your Network:{C_RESET}")
-    print(f"    {C_YELLOW}Option A{C_RESET} {C_WHITE}- Direct LAN Access {C_DIM}(may need firewall configured - {C_RED}SEE README{C_DIM}){C_RESET}")
+    print(f"    {C_YELLOW}Option A{C_RESET} {C_WHITE}- Direct LAN Access {C_DIM}(may need firewall configured - {C_RESET}{C_RED}SEE README{C_RESET}{C_DIM}){C_RESET}")
     print(f"      {C_CYAN}{url_lan}{C_RESET}  {C_DIM}<- Your node's detected IP{C_RESET}")
     print("")
-    print(f"    {C_YELLOW}Option B{C_RESET} {C_WHITE}- SSH Tunnel {C_DIM}({C_RED}SEE README{C_DIM} - then visit){C_RESET}")
+    print(f"    {C_YELLOW}Option B{C_RESET} {C_WHITE}- SSH Tunnel {C_DIM}({C_RESET}{C_RED}SEE README{C_RESET}{C_DIM} - then visit){C_RESET}")
     print(f"      {C_CYAN}{url_local}{C_RESET}")
     print("")
     print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
