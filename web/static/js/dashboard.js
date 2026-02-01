@@ -35,9 +35,9 @@ const allColumns = [
     'in_addrman'
 ];
 
-// Default visible columns in user's preferred order
+// Default visible columns in user's preferred order (id first)
 const defaultVisibleColumns = [
-    'network', 'conntime', 'direction', 'ip', 'port', 'subver',
+    'id', 'network', 'conntime', 'direction', 'ip', 'port', 'subver',
     'connection_type', 'services_abbrev',
     'city', 'regionName', 'country', 'continent', 'isp',
     'ping_ms', 'bytessent', 'bytesrecv',
@@ -746,10 +746,10 @@ function setupColumnConfig() {
 
     if (!configBtn || !modal || !closeBtn || !checkboxContainer) return;
 
-    // Populate checkboxes
+    // Populate checkboxes - show ALL columns (not just defaults)
     function populateCheckboxes() {
         checkboxContainer.innerHTML = '';
-        defaultVisibleColumns.forEach(col => {
+        allColumns.forEach(col => {
             const label = document.createElement('label');
             label.className = 'column-checkbox';
             label.innerHTML = `
@@ -766,6 +766,10 @@ function setupColumnConfig() {
                 if (cb.checked) {
                     if (!visibleColumns.includes(col)) {
                         visibleColumns.push(col);
+                    }
+                    // Also add to columnOrder if not present (for newly enabled columns)
+                    if (!columnOrder.includes(col)) {
+                        columnOrder.push(col);
                     }
                 } else {
                     visibleColumns = visibleColumns.filter(c => c !== col);
@@ -990,8 +994,8 @@ function loadColumnPreferences() {
         const savedOrder = localStorage.getItem('mbcore_column_order');
         if (savedOrder) {
             columnOrder = JSON.parse(savedOrder);
-            // Ensure all default columns are in the order (in case new columns were added)
-            defaultVisibleColumns.forEach(col => {
+            // Ensure all columns (including newly added defaults) are in the order
+            allColumns.forEach(col => {
                 if (!columnOrder.includes(col)) {
                     columnOrder.push(col);
                 }
