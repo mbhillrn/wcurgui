@@ -51,37 +51,143 @@ cd MBCore-Dashboard
 The script will:
 1. Check for required dependencies (and offer to install missing ones)
 2. Auto-detect your Bitcoin Core installation
-3. Launch the web dashboard
+3. Create a Python virtual environment
+4. Launch the web dashboard on port 58333
 
-Then open your browser to the displayed URL (typically `http://localhost:58333`).
+**For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md).**
 
-## Network Access & Firewall
+---
 
-The dashboard runs on **port 58333** by default.
+## How To Access The Dashboard
 
-### Accessing from the Same Computer (Local)
+### Scenarios:
 
-Simply open your browser to:
+- **Scenario 1:** Bitcoin Core on a full GUI Linux/Ubuntu machine with desktop and browser (not headless)
+- **Scenario 2:** Bitcoin Core on a headless Linux machine (no desktop/browser)
+  - Option A: Expose on LAN
+  - Option B: SSH Tunnel
+
+---
+
+### Scenario 1: Full GUI Linux/Ubuntu Machine (Not Headless)
+
+This is the easiest case. On the machine running Bitcoin Core:
+
+```bash
+cd /path/to/MBCore-Dashboard
+./da.sh
+```
+
+The script will:
+1. Check prerequisites (jq, curl, sqlite3, python3, etc.)
+2. Detect your Bitcoin Core setup
+3. Create a Python virtual environment
+4. Start the web server on port 58333
+5. **Automatically open your browser** to `http://127.0.0.1:58333`
+
+You're done - the dashboard appears in your browser.
+
+---
+
+### Scenario 2: Headless Linux Machine (No Desktop/Browser)
+
+A headless machine has no local browser, so you need to access the dashboard from another device.
+
+---
+
+#### Scenario 2 Option A: Expose on LAN
+
+On the Bitcoin Core machine (either directly or via SSH), start the dashboard:
+
+```bash
+cd /path/to/MBCore-Dashboard
+./da.sh
+```
+
+The script will:
+1. Check prerequisites (jq, curl, sqlite3, python3, etc.)
+2. Detect your Bitcoin Core setup
+3. Create a Python virtual environment
+4. Start the web server on port 58333
+
+Select option `1) Enter MBCore Dashboard` from the main menu.
+
+When the dashboard starts, it displays the access URLs right on screen:
+
+```
+════════════════════════════════════════════════════════════════════
+  ** FOLLOW THESE INSTRUCTIONS TO GET TO THE DASHBOARD! **
+════════════════════════════════════════════════════════════════════
+
+  To enter the dashboard, visit (Ctrl+Click to open):
+    http://192.168.4.100:58333    From anywhere on your network
+    http://127.0.0.1:58333        From the local node machine
+════════════════════════════════════════════════════════════════════
+```
+
+**Your machine's IP address will be displayed on this screen.** From any other computer on your network, open a browser and go to that address:
+
+```
+(EXAMPLE) http://192.168.x.xxx:58333
+```
+
+The correct IP for your setup will be shown in the terminal output.
+
+**If it won't connect from another device:** Your firewall may be blocking port 58333. See [Firewall Configuration](#firewall-configuration) below.
+
+---
+
+#### Scenario 2 Option B: SSH Tunnel
+
+From your **other computer** (the one with a browser):
+
+```bash
+# SSH into the headless machine with a tunnel
+ssh -L 58333:127.0.0.1:58333 user@headless-machine-ip
+```
+
+Then on the headless machine (via that SSH session):
+
+```bash
+cd /path/to/MBCore-Dashboard
+./da.sh
+```
+
+The script will:
+1. Check prerequisites (jq, curl, sqlite3, python3, etc.)
+2. Detect your Bitcoin Core setup
+3. Create a Python virtual environment
+4. Start the web server on port 58333
+
+Select option `1) Enter MBCore Dashboard` from the main menu.
+
+Now on your **local computer's browser**, go to:
 ```
 http://127.0.0.1:58333
 ```
-No firewall configuration needed.
 
-### Accessing from Another Computer on Your Network
+The tunnel forwards your local port 58333 to the headless machine's port 58333. No firewall changes needed.
 
-To access the dashboard from a phone, tablet, or another computer on your local network:
+---
 
-1. Use your computer's local IP address (e.g., `http://192.168.1.100:58333`)
-2. **You may need to open the firewall port** - see below
+### Quick Reference
 
-### Firewall Configuration
+| Situation | How to Access |
+|-----------|---------------|
+| Full GUI machine | Run `./da.sh` → browser auto-opens to `http://127.0.0.1:58333` |
+| Headless + LAN access | Run `./da.sh` → note IP shown on screen → browse to `http://[that-ip]:58333` from any device on your network |
+| Headless + SSH tunnel | `ssh -L 58333:127.0.0.1:58333 user@host` → run `./da.sh` → browse to `http://127.0.0.1:58333` on your local machine |
+
+---
+
+## Firewall Configuration
 
 **The dashboard includes a built-in Firewall Helper!** From the main menu, select `f) Firewall Helper` to:
 - Auto-detect your IP and subnet
 - Check if UFW is active
 - Optionally add the firewall rule for you
 
-#### Manual Firewall Commands (Ubuntu/Mint/Debian with UFW)
+### Manual Firewall Commands (Ubuntu/Mint/Debian with UFW)
 
 ```bash
 # Option 1: Allow only your local network (recommended)
@@ -93,7 +199,7 @@ sudo ufw allow 58333/tcp
 
 Replace `192.168.1.0/24` with your actual subnet (the Firewall Helper will detect this for you).
 
-#### To Remove the Firewall Rule Later
+### To Remove the Firewall Rule Later
 
 ```bash
 # If you used Option 1:
@@ -103,7 +209,7 @@ sudo ufw delete allow from 192.168.1.0/24 to any port 58333 proto tcp
 sudo ufw delete allow 58333/tcp
 ```
 
-#### No Firewall?
+### No Firewall?
 
 If you don't have a firewall enabled (or UFW is inactive), the dashboard should work without any configuration.
 
