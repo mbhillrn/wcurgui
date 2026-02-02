@@ -45,8 +45,8 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 
 ```bash
 # Clone the repository
-git clone https://github.com/mbhillrn/MBCore-Dashboard.git
-cd MBCore-Dashboard
+git clone https://github.com/mbhillrn/Bitcoin-Core-Peer-Map.git
+cd Bitcoin-Core-Peer-Map
 
 # Run the dashboard
 ./da.sh
