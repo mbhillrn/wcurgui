@@ -184,11 +184,11 @@ create_venv() {
             echo -e "This error is unexpected on $system_name - Python usually includes"
             echo -e "virtual environment support by default."
             echo ""
-            echo -e "Your Python installation may need to be reinstalled or repaired."
+            echo -e "One thing to try is repairing Python using your system tools."
             if [[ "$pkg_mgr" == "fedora" ]]; then
-                echo -e "You could try: sudo dnf reinstall python3"
+                echo -e "(example: sudo dnf reinstall python3)"
             else
-                echo -e "You could try: sudo pacman -S python"
+                echo -e "(example: sudo pacman -S python)"
             fi
             echo ""
             echo -e "If the problem persists, please open an issue on GitHub with the"
