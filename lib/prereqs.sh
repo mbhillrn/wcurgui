@@ -105,10 +105,10 @@ create_venv() {
     fi
 
     # Couldn't create venv - show what happened and try to help
-    msg_warn "Virtual environment setup needed"
     echo ""
-    echo -e "${T_DIM}Python said:${RST}"
-    echo "$venv_error" | head -10
+    echo -e "${T_SUCCESS}${BOLD}Python said:${RST}"
+    echo ""
+    echo -e "${T_DIM}$venv_error${RST}" | head -10
     echo ""
 
     # Detect system type
@@ -119,7 +119,10 @@ create_venv() {
         debian)
             # Ubuntu/Debian/Mint/Pop!_OS etc - this is the common case
             # These systems require a separate package for venv
-            echo -e "On Ubuntu/Debian systems, Python needs an extra package to create virtual environments."
+            echo -e "${T_SUCCESS}${BOLD}We can fix this for you!${RST}"
+            echo ""
+            echo "On Ubuntu/Debian systems, Python needs an extra package to create"
+            echo "virtual environments. We can install it now."
             echo ""
 
             # Get the right package name for their Python version
@@ -167,7 +170,7 @@ create_venv() {
                 fi
             else
                 echo ""
-                echo "To continue, you'll need to install it yourself:"
+                echo "No problem. To continue later, install it yourself:"
                 echo "  sudo apt install $pkg_name"
                 echo ""
                 echo "Then run this program again."
@@ -181,14 +184,15 @@ create_venv() {
             local system_name="Fedora"
             [[ "$pkg_mgr" == "arch" ]] && system_name="Arch Linux"
 
-            echo -e "This error is unexpected on $system_name - Python usually includes"
-            echo -e "virtual environment support by default."
+            echo -e "${T_WARN}${BOLD}This is unexpected on $system_name${RST}"
             echo ""
-            echo -e "One thing to try is repairing Python using your system tools."
+            echo "Python usually includes virtual environment support by default on $system_name."
+            echo ""
+            echo "One thing to try is repairing Python using your system tools."
             if [[ "$pkg_mgr" == "fedora" ]]; then
-                echo -e "(example: sudo dnf reinstall python3)"
+                echo "(example: sudo dnf reinstall python3)"
             else
-                echo -e "(example: sudo pacman -S python)"
+                echo "(example: sudo pacman -S python)"
             fi
             echo ""
             echo -e "If the problem persists, please open an issue on GitHub with the"
@@ -198,13 +202,13 @@ create_venv() {
 
         *)
             # Unknown system - just show the error and give general guidance
-            echo -e "We couldn't automatically fix this on your system."
+            echo -e "${T_WARN}${BOLD}We couldn't detect your system type${RST}"
             echo ""
-            echo -e "You need to install Python virtual environment support."
-            echo -e "Search for: \"python3 venv install\" + your operating system name"
+            echo "You need to install Python virtual environment support."
+            echo "Search for: \"python3 venv install\" + your operating system name"
             echo ""
-            echo -e "If you think this should work automatically, please open an issue"
-            echo -e "on GitHub with the error message shown above."
+            echo "If you think this should work automatically, please open an issue"
+            echo "on GitHub with the error message shown above."
             return 1
             ;;
     esac
