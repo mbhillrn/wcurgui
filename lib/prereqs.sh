@@ -124,7 +124,7 @@ create_venv() {
 
             # Get the right package name for their Python version
             local py_version
-            py_version=$(python3 --version 2>/dev/null | grep -oP '\d+\.\d+' | head -1)
+            py_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
             local pkg_name
             if [[ -n "$py_version" ]]; then
                 pkg_name="python${py_version}-venv"
@@ -243,11 +243,21 @@ install_venv_pkg() {
     esac
 
     msg_info "Installing $pkg..."
-    if "$pip_cmd" install "$install_name" --quiet 2>/dev/null; then
+
+    # Capture pip output so we can show errors if it fails
+    local pip_output
+    pip_output=$("$pip_cmd" install "$install_name" 2>&1)
+    local pip_result=$?
+
+    if [[ $pip_result -eq 0 ]]; then
         msg_ok "Installed $pkg"
         return 0
     else
         msg_err "Failed to install $pkg"
+        echo ""
+        echo -e "${T_DIM}pip said:${RST}"
+        echo "$pip_output" | tail -15
+        echo ""
         return 1
     fi
 }
