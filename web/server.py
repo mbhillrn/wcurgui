@@ -42,8 +42,8 @@ GEO_API_URL = "http://ip-api.com/json"
 GEO_API_FIELDS = "status,continent,continentCode,country,countryCode,region,regionName,city,lat,lon,isp,query"
 RECENT_WINDOW = 20     # Seconds for recent changes
 
-# Fixed port for web dashboard (manual selection if blocked)
-WEB_PORT = 58333
+# Default port for web dashboard (can be configured)
+DEFAULT_WEB_PORT = 58333
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
@@ -63,6 +63,76 @@ def get_version():
         return "0.0.0"
 
 VERSION = get_version()
+
+
+def get_configured_port():
+    """Read configured port from config file, return default if not set"""
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('MBTC_WEB_PORT='):
+                        value = line.split('=', 1)[1].strip('"').strip("'")
+                        port = int(value)
+                        if 1024 <= port <= 65535:
+                            return port
+    except Exception:
+        pass
+    return DEFAULT_WEB_PORT
+
+
+def save_port_to_config(port: int):
+    """Save the port to the config file (for port busy scenarios)"""
+    try:
+        if CONFIG_FILE.exists():
+            lines = CONFIG_FILE.read_text().splitlines()
+            found = False
+            new_lines = []
+            for line in lines:
+                if line.startswith('MBTC_WEB_PORT='):
+                    new_lines.append(f'MBTC_WEB_PORT="{port}"')
+                    found = True
+                else:
+                    new_lines.append(line)
+            if not found:
+                # Add before MBTC_CONFIGURED line if it exists
+                final_lines = []
+                for line in new_lines:
+                    if line.startswith('MBTC_CONFIGURED='):
+                        final_lines.append(f'MBTC_WEB_PORT="{port}"')
+                    final_lines.append(line)
+                new_lines = final_lines if final_lines else new_lines + [f'MBTC_WEB_PORT="{port}"']
+            CONFIG_FILE.write_text('\n'.join(new_lines) + '\n')
+    except Exception as e:
+        print(f"Warning: Could not save port to config: {e}")
+
+
+def detect_active_firewall():
+    """Detect if ufw or firewalld is active. Returns (name, is_active) or (None, False)"""
+    try:
+        # Check ufw first
+        result = subprocess.run(
+            ['systemctl', 'is-active', 'ufw'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.stdout.strip() == 'active':
+            return ('ufw', True)
+    except Exception:
+        pass
+
+    try:
+        # Check firewalld
+        result = subprocess.run(
+            ['systemctl', 'is-active', 'firewalld'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.stdout.strip() == 'active':
+            return ('firewalld', True)
+    except Exception:
+        pass
+
+    return (None, False)
 
 # Geo status codes
 GEO_OK = 0
@@ -1292,8 +1362,8 @@ def main():
     # Kill any existing dashboard processes that might be holding the port
     kill_existing_dashboard()
 
-    # Use fixed port, retry a few times if needed (for TIME_WAIT sockets)
-    port = WEB_PORT
+    # Use configured port from config file
+    port = get_configured_port()
     if not check_port_available(port):
         print(f"\n{C_YELLOW}⚠ Port {port} is in use, waiting for it to be released...{C_RESET}")
         # Retry 3 times with 1.5 second delays
@@ -1324,7 +1394,9 @@ def main():
                     sys.exit(0)
                 elif choice == '1':
                     port = get_manual_port()
-                    print(f"{C_GREEN}✓ Using port {port}{C_RESET}\n")
+                    # Save the new port to config so it persists
+                    save_port_to_config(port)
+                    print(f"{C_GREEN}✓ Using port {port} (saved to config){C_RESET}\n")
                     break
                 else:
                     print(f"{C_RED}Invalid choice. Enter 1 or q{C_RESET}")
@@ -1346,47 +1418,58 @@ def main():
     lan_ip = local_ips[0] if local_ips else "127.0.0.1"
     subnet = subnets[0] if subnets else "192.168.0.0/16"
 
+    # Detect firewall
+    firewall_name, firewall_active = detect_active_firewall()
+
     # Print access info with colors and formatting
     line_w = 84
     logo_w = 52  # Width of MBCORE ASCII art
     print("")
-    print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
+    print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}███╗   ███╗██████╗  ██████╗ ██████╗ ██████╗ ███████╗{C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}████╗ ████║██╔══██╗██╔════╝██╔═══██╗██╔══██╗██╔════╝{C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}██╔████╔██║██████╔╝██║     ██║   ██║██████╔╝█████╗  {C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}██║╚██╔╝██║██╔══██╗██║     ██║   ██║██╔══██╗██╔══╝  {C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}██║ ╚═╝ ██║██████╔╝╚██████╗╚██████╔╝██║  ██║███████╗{C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝{C_RESET}")
-    print(f"  {C_BOLD}{C_WHITE}Dashboard{C_RESET}  {C_DIM}v{VERSION}{C_RESET} {C_WHITE}(Bitcoin Core peer info/map/tools){C_RESET}")
-    print(f"  {'─' * logo_w}")
-    print(f"  {C_DIM}Created by mbhillrn{C_RESET}")
-    print(f"  {C_DIM}MIT License - Free to use, modify, and distribute{C_RESET}")
-    print(f"  {C_DIM}Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
-    print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
-    print(f"  {C_BOLD}{C_YELLOW}** FOLLOW THESE INSTRUCTIONS TO GET TO THE DASHBOARD! **{C_RESET}")
-    print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
+    print(f"  Dashboard v{VERSION} {C_WHITE}(Bitcoin Core peer info / map / tools){C_RESET}")
+    print(f"  {C_BLUE}{'─' * logo_w}{C_RESET}")
+    print(f"  Created by mbhillrn")
+    print(f"  MIT License – Free to use, modify, and distribute")
+    print(f"  {C_BOLD}{C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
+    print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
+    print(f"  {C_BOLD}{C_YELLOW}** INSTRUCTIONS TO VIEW DASHBOARD! **{C_RESET}")
+    print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print("")
-    print(f"  {C_WHITE}To enter the dashboard, visit {C_DIM}(First run? See {C_RESET}{C_RED}README/QUICKSTART{C_RESET}{C_DIM}){C_RESET}")
+    print(f"  The dashboard is viewed in your WEB BROWSER (Chrome, Firefox, etc).")
+    print(f"  This is easy — just open ONE of the links below.")
     print("")
     url_lan = f"http://{lan_ip}:{port}"
     url_local = f"http://127.0.0.1:{port}"
-    print(f"  {C_BOLD}{C_GREEN}Scenario 1{C_RESET} {C_WHITE}- Node/MBCore on same machine you will be opening your browser from:{C_RESET}")
-    print(f"      {C_CYAN}{url_local}{C_RESET}")
+    print(f"  {C_BOLD}{C_YELLOW}Opening your browser on the SAME computer this program is running on:{C_RESET}")
+    print(f"      {C_GREEN}{url_local}{C_RESET}")
     print("")
-    print(f"  {C_BOLD}{C_GREEN}Scenario 2{C_RESET} {C_WHITE}- You are opening your browser from another machine on the network:{C_RESET}")
-    print(f"    {C_YELLOW}Option A{C_RESET} {C_WHITE}- Direct LAN Access {C_DIM}(may need firewall configured - {C_RESET}{C_RED}SEE README{C_RESET}{C_DIM}){C_RESET}")
-    print(f"      {C_CYAN}{url_lan}{C_RESET}  {C_DIM}<- Your node's detected IP{C_RESET}")
+    print(f"  {C_BOLD}{C_YELLOW}Opening your browser on ANOTHER computer on your local network:{C_RESET}")
+    print(f"    {C_BOLD}{C_YELLOW}Option A{C_RESET} – Direct network access {C_BOLD}{C_YELLOW}(recommended){C_RESET}")
+    print(f"      {C_GREEN}{url_lan}{C_RESET}  {C_DIM}<- auto-detected node IP{C_RESET}")
+    # Show firewall warning if detected
+    if firewall_active and firewall_name:
+        print(f"      {C_RED}Firewall detected ({firewall_name}): may need configuring for port {port}{C_RESET}")
+    print(f"      {C_DIM}(If you use a firewall, it may need to be configured.{C_RESET}")
+    print(f"      {C_DIM} Please see the README or run the Firewall Helper Tool{C_RESET}")
+    print(f"      {C_DIM} from the main menu (Option 4).){C_RESET}")
     print("")
-    print(f"    {C_YELLOW}Option B{C_RESET} {C_WHITE}- SSH Tunnel {C_DIM}({C_RESET}{C_RED}SEE README{C_RESET}{C_DIM} - then visit){C_RESET}")
-    print(f"      {C_CYAN}{url_local}{C_RESET}")
+    print(f"    {C_BOLD}{C_YELLOW}Option B{C_RESET} – SSH tunnel (advanced, see README)")
+    print(f"      {C_GREEN}{url_local}{C_RESET}")
     print("")
-    print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
-    print(f"  {C_BOLD}{C_WHITE}TROUBLESHOOTING:{C_RESET} {C_RED}SEE THE README{C_RESET}")
-    print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
+    print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
+    print(f"  {C_RED}🔴 The README has been created to guide you through this process.{C_RESET}")
+    print(f"  {C_RED}🔴 Please review it if this is your first time running MBCore or need to troubleshoot.{C_RESET}")
+    print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
     print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop the dashboard (press twice to force)")
-    print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
-    print(f"  {C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
-    print(f"{C_CYAN}{'═' * line_w}{C_RESET}")
+    print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
+    print(f"  {C_BOLD}{C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
+    print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print("")
 
     # Signal handler for fast shutdown

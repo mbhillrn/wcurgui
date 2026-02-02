@@ -316,10 +316,12 @@ The tunnel forwards your local port 58333 to the headless machine's port 58333. 
 
 ## Firewall Configuration
 
-**The dashboard includes a built-in Firewall Helper!** From the main menu, select `f) Firewall Helper` to:
+**The dashboard includes a built-in Firewall Helper!** From the main menu, select `4) Firewall Helper` to:
 - Auto-detect your IP and subnet
-- Check if UFW is active
+- Check if UFW or firewalld is active
 - Optionally add the firewall rule for you
+
+**Using a different port?** Use `p) Port Settings` from the main menu to change the dashboard port before running the Firewall Helper. The helper will automatically use your configured port.
 
 ### Manual Firewall Commands (Ubuntu/Mint/Debian with UFW)
 
@@ -425,10 +427,12 @@ The database can be reset from the main menu if needed.
 1. **Enter MBCore Web Dashboard** - Launch the web-based dashboard with interactive map
 2. **Reset Config** - Clear saved Bitcoin Core configuration
 3. **Reset Database** - Clear the peer geo-location cache
+4. **Firewall Helper** - Configure firewall for network access
 
 Additional options:
 - **d) Rerun Detection** - Re-detect Bitcoin Core settings
 - **m) Manual Settings** - Manually enter Bitcoin Core paths
+- **p) Port Settings** - Change the dashboard port (default: 58333). Useful if port 58333 is in use or you prefer a different port. This setting persists across reboots and updates.
 - **u) Update** - Update to the latest version (shown when an update is available)
 
 ## Usage Tips

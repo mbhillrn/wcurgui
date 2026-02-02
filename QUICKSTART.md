@@ -129,10 +129,13 @@ The correct IP for your setup will be shown in the terminal output.
 
 **Firewall Setup:**
 
-The dashboard includes a **Firewall Helper** in the main menu (press `f`) that works with UFW to automatically configure the firewall for you.
+The dashboard includes a **Firewall Helper** in the main menu (option `4`) that works with UFW to automatically configure the firewall for you.
+
+**Using a different port?** Use `p) Port Settings` from the main menu to change the dashboard port first. The Firewall Helper will automatically use your configured port.
 
 Or you can manually allow the port:
 ```bash
+# Replace 58333 with your configured port if different
 sudo ufw allow from 192.168.0.0/16 to any port 58333 proto tcp
 ```
 
@@ -187,10 +190,21 @@ The tunnel forwards your local port 58333 to the headless machine's port 58333. 
 |------|----------------|
 | Main script | `./da.sh` |
 | Web server | `web/server.py` (FastAPI + Uvicorn) |
-| **Port** | **58333** |
+| **Default Port** | **58333** (configurable via `p) Port Settings` in main menu) |
 | Config | `data/config.conf` (auto-generated) |
 | Peer cache DB | `data/peers.db` (SQLite) |
 | Python venv | `./venv/` (auto-created) |
+
+### Changing the Dashboard Port
+
+If port 58333 is in use or you prefer a different port:
+
+1. From the main menu, select `p) Port Settings`
+2. Choose option `1) Change port`
+3. Enter your preferred port number (1024-65535, high ports like 49152+ recommended)
+4. The setting persists across reboots and updates
+
+**Note:** If you change the port, remember to update your firewall rules and SSH tunnel commands to use the new port.
 
 ---
 
