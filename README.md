@@ -14,6 +14,13 @@ A lightweight real-time monitoring dashboard for Bitcoin Core nodes that visuali
 
 **Requires:** Bitcoin Core (`bitcoind`) installed and running on your system.
 
+#Download Repo "Quick" Reference
+```bash
+# Clone the repository
+git clone https://github.com/mbhillrn/Bitcoin-Core-Peer-Map.git
+cd Bitcoin-Core-Peer-Map
+```
+
 ---
 
 ## Table of Contents
