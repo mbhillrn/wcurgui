@@ -144,8 +144,9 @@ show_menu() {
     echo -e "  ${T_INFO}4)${RST} Firewall Helper"
     echo -e "     ${T_DIM}- Configure firewall for network access${RST}"
     echo ""
-    echo -e "  ${T_DIM}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
-    echo -e "  ${T_DIM}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
+    echo -e "  ${T_SECONDARY}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
+    echo -e "  ${T_SECONDARY}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
+    echo -e "  ${T_SECONDARY}p)${RST} Port Settings      ${T_DIM}- Change dashboard port (current: ${MBTC_WEB_PORT:-58333})${RST}"
     if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
         echo -e "  ${T_WARN}u)${RST} Update             ${T_DIM}- Update to v${LATEST_VERSION}${RST}"
     fi
@@ -402,7 +403,7 @@ firewall_helper() {
 
     # Get network info
     get_local_network_info
-    local port=58333
+    local port="${MBTC_WEB_PORT:-58333}"
 
     echo -e "${T_INFO}Detected Network Info:${RST}"
     echo -e "  Your IP:        ${T_SUCCESS}$LOCAL_IP${RST}"
@@ -495,6 +496,95 @@ firewall_helper() {
         echo -e "${T_INFO}If you install UFW later, use this command:${RST}"
         echo -e "  ${T_WARN}sudo ufw allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
     fi
+
+    echo ""
+    echo -en "${T_DIM}Press Enter to continue...${RST}"
+    read -r
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PORT SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+port_settings() {
+    clear
+    show_banner
+
+    echo ""
+    echo -e "${T_SECONDARY}${BOLD}Dashboard Port Settings${RST}"
+    echo ""
+    echo -e "${T_DIM}Configure the port used to access the MBCore Dashboard in your browser.${RST}"
+    echo ""
+
+    local current_port="${MBTC_WEB_PORT:-58333}"
+    echo -e "  ${T_INFO}Current port:${RST} ${T_SUCCESS}$current_port${RST}"
+    echo ""
+    echo -e "${T_DIM}Port numbers can range from 1024 to 65535.${RST}"
+    echo -e "${T_DIM}Higher numbers (49152-65535) are recommended to avoid conflicts.${RST}"
+    echo -e "${T_DIM}Suggested alternatives: 58334, 58335, 49152, 51234, 60000${RST}"
+    echo ""
+    echo -e "  ${T_INFO}1)${RST} Change port"
+    echo -e "  ${T_INFO}2)${RST} Reset to default (58333)"
+    echo -e "  ${T_DIM}b)${RST} Back to menu"
+    echo ""
+
+    echo -en "${T_DIM}Choice:${RST} "
+    read -r port_choice
+
+    case "$port_choice" in
+        1)
+            echo ""
+            while true; do
+                echo -en "${T_INFO}Enter new port number (1024-65535):${RST} "
+                read -r new_port
+
+                # Allow 'b' to go back
+                if [[ "$new_port" == "b" || "$new_port" == "B" ]]; then
+                    return
+                fi
+
+                # Validate port number
+                if [[ ! "$new_port" =~ ^[0-9]+$ ]]; then
+                    msg_err "Please enter a valid number"
+                    continue
+                fi
+
+                if [[ "$new_port" -lt 1024 || "$new_port" -gt 65535 ]]; then
+                    msg_err "Port must be between 1024 and 65535"
+                    continue
+                fi
+
+                # Warn if using common ports
+                if [[ "$new_port" -lt 49152 ]]; then
+                    echo ""
+                    msg_warn "Ports below 49152 may conflict with other services"
+                    if ! prompt_yn "Use port $new_port anyway?"; then
+                        continue
+                    fi
+                fi
+
+                # Set and save the new port
+                MBTC_WEB_PORT="$new_port"
+                save_config
+                echo ""
+                msg_ok "Port changed to $new_port"
+                msg_info "This setting will persist across reboots and updates"
+                break
+            done
+            ;;
+        2)
+            MBTC_WEB_PORT="58333"
+            save_config
+            echo ""
+            msg_ok "Port reset to default (58333)"
+            ;;
+        b|B)
+            return
+            ;;
+        *)
+            msg_warn "Invalid option"
+            ;;
+    esac
 
     echo ""
     echo -en "${T_DIM}Press Enter to continue...${RST}"
@@ -721,6 +811,9 @@ main() {
                 ;;
             m|M)
                 run_manual_config
+                ;;
+            p|P)
+                port_settings
                 ;;
             u|U)
                 if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then

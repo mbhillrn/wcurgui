@@ -28,6 +28,7 @@ export MBTC_RPC_USER=""
 export MBTC_RPC_PASS=""
 export MBTC_COOKIE_PATH=""
 export MBTC_VERSION=""
+export MBTC_WEB_PORT="58333"
 export MBTC_CONFIGURED=0
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -65,6 +66,7 @@ MBTC_RPC_HOST="$MBTC_RPC_HOST"
 MBTC_RPC_PORT="$MBTC_RPC_PORT"
 MBTC_RPC_USER="$MBTC_RPC_USER"
 MBTC_COOKIE_PATH="$MBTC_COOKIE_PATH"
+MBTC_WEB_PORT="${MBTC_WEB_PORT:-58333}"
 MBTC_CONFIGURED=1
 EOF
     chmod 600 "$MBTC_CACHE_FILE"
@@ -88,6 +90,7 @@ clear_config() {
     MBTC_RPC_PASS=""
     MBTC_COOKIE_PATH=""
     MBTC_VERSION=""
+    MBTC_WEB_PORT="58333"
     MBTC_CONFIGURED=0
 }
 
