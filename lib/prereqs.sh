@@ -671,7 +671,7 @@ run_python_check() {
         local terminal_failed=0
         if [[ $need_terminal -eq 1 ]]; then
             echo ""
-            echo -e "Installing terminal packages..."
+            echo -e "Installing core Python packages..."
             echo -e "${T_DIM}───────────────────────────────────${RST}"
             for item in "${missing_terminal[@]}"; do
                 IFS='|' read -r pkg desc <<< "$item"
@@ -682,7 +682,7 @@ run_python_check() {
         fi
 
         if [[ $terminal_failed -eq 1 ]]; then
-            msg_err "Failed to install required terminal packages"
+            msg_err "Failed to install required Python packages"
             msg_err "The program cannot run without these packages"
             PYTHON_MODE="none"
             return 1
@@ -706,7 +706,7 @@ run_python_check() {
             echo ""
             msg_warn "Some web packages failed to install"
             msg_warn "Web dashboard will not be available"
-            msg_ok "Terminal mode will work normally"
+            msg_ok "Core functionality will work normally"
             PYTHON_MODE="terminal"
             return 0
         fi
@@ -722,7 +722,7 @@ run_python_check() {
         echo ""
         echo "Options:"
         echo "  1) Install packages (recommended)"
-        echo "  2) Continue without web dashboard (terminal only)"
+        echo "  2) Continue without web dashboard (limited functionality)"
         echo "  3) Exit"
         echo ""
         echo -en "${T_PROMPT}Choose [1-3]: ${RST}"
@@ -736,12 +736,12 @@ run_python_check() {
                 ;;
             2)
                 if [[ $need_terminal -eq 1 ]]; then
-                    msg_err "Terminal packages are required even for terminal-only mode"
+                    msg_err "Core Python packages are required for all modes"
                     msg_err "Please install packages or exit"
                     PYTHON_MODE="none"
                     return 1
                 fi
-                msg_warn "Continuing in terminal-only mode"
+                msg_warn "Continuing without web dashboard"
                 msg_warn "Web dashboard will not be available"
                 PYTHON_MODE="terminal"
                 return 0
