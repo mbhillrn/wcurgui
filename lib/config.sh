@@ -72,6 +72,40 @@ EOF
     chmod 600 "$MBTC_CACHE_FILE"
 }
 
+# Get a config value with optional default
+# Usage: value=$(get_config "KEY" "default")
+get_config() {
+    local key="$1"
+    local default="${2:-}"
+    local value=""
+
+    if [[ -f "$MBTC_CACHE_FILE" ]]; then
+        value=$(grep "^${key}=" "$MBTC_CACHE_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+    fi
+
+    echo "${value:-$default}"
+}
+
+# Set a config value
+# Usage: set_config "KEY" "value"
+set_config() {
+    local key="$1"
+    local value="$2"
+
+    mkdir -p "$MBTC_CONFIG_DIR"
+
+    # Create file if it doesn't exist
+    [[ ! -f "$MBTC_CACHE_FILE" ]] && touch "$MBTC_CACHE_FILE" && chmod 600 "$MBTC_CACHE_FILE"
+
+    # Remove existing key if present
+    if grep -q "^${key}=" "$MBTC_CACHE_FILE" 2>/dev/null; then
+        sed -i "/^${key}=/d" "$MBTC_CACHE_FILE"
+    fi
+
+    # Append new value
+    echo "${key}=\"${value}\"" >> "$MBTC_CACHE_FILE"
+}
+
 # Check if config exists and is valid
 config_exists() {
     [[ -f "$MBTC_CACHE_FILE" ]] && load_config &>/dev/null
