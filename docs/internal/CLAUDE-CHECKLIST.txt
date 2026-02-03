@@ -13,7 +13,7 @@ PROJECT REORGANIZATION:
   [x] Moved PROJECT_PROGRESS.md, PROJ-Plan, CLAUDE-CHECKLIST.txt to docs/internal/
   [x] Moved PREREQS.md to docs/
   [x] Created proper README.md with project overview
-  [x] Updated version to 2.0.0 in da.sh, web/server.py, web/templates/index.html
+  [x] Updated version to 2.0.0 in da.sh, web/MBCoreServer.py, web/templates/index.html
 
 STARTUP UI CLEANUP:
   [x] Removed big blue box headers from prerequisites check

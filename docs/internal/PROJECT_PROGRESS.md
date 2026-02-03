@@ -17,7 +17,7 @@ lib/
   prereqs.sh             # Prerequisites checking
   ui.sh                  # UI helpers (spinners, boxes, prompts)
 web/
-  server.py              # FastAPI web server with SSE
+  MBCoreServer.py        # FastAPI web server with SSE
   templates/index.html   # Web dashboard template
   static/                # CSS and JavaScript
 data/                    # Config and database (created at runtime)
@@ -38,8 +38,7 @@ docs/                    # Documentation
   - Graceful Ctrl+C (first warns, second force quits)
 
 - **Prerequisites Checker** (`lib/prereqs.sh`): Validates required tools
-  - jq, curl, sqlite3, python3 (required)
-  - ss, bc (optional)
+  - jq, curl, sqlite3, python3, vmstat, awk (required)
   - Python packages: rich, requests
   - Offers to install missing packages
 
@@ -135,7 +134,7 @@ docs/                    # Documentation
   - Smoother first-run experience
 
 ### v1.0.0 - Web Dashboard
-- **FastAPI Web Server** (`web/server.py`): Full web dashboard
+- **FastAPI Web Server** (`web/MBCoreServer.py`): Full web dashboard
   - Leaflet.js map with peer locations
   - Real-time updates via Server-Sent Events (SSE)
   - Main peer table with sorting and filtering

@@ -38,9 +38,12 @@ from sse_starlette.sse import EventSourceResponse
 REFRESH_INTERVAL = 10  # Seconds between peer refreshes
 GEO_API_DELAY = 1.5    # Seconds between API calls
 GEO_API_URL = "http://ip-api.com/json"
-# New fields: continent info added, removed district/as/hosting for cleaner data
-GEO_API_FIELDS = "status,continent,continentCode,country,countryCode,region,regionName,city,lat,lon,isp,query"
+# All available fields from ip-api.com (except query, status, message, reverse)
+GEO_API_FIELDS = "status,continent,continentCode,country,countryCode,region,regionName,city,district,zip,lat,lon,timezone,offset,currency,isp,org,as,asname,mobile,proxy,hosting"
 RECENT_WINDOW = 20     # Seconds for recent changes
+
+# Geo database repository URL
+GEO_DB_REPO_URL = "https://raw.githubusercontent.com/mbhillrn/MBCore-GeoDatabase/main/geo.db"
 
 # Default port for web dashboard (can be configured)
 DEFAULT_WEB_PORT = 58333
@@ -50,7 +53,8 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / 'data'
 CONFIG_FILE = DATA_DIR / 'config.conf'
-DB_FILE = DATA_DIR / 'peers.db'
+DB_FILE = DATA_DIR / 'peers.db'  # Legacy terminal UI database (unused)
+GEO_DB_FILE = DATA_DIR / 'geo.db'  # Geolocation cache database
 STATIC_DIR = SCRIPT_DIR / 'static'
 TEMPLATES_DIR = SCRIPT_DIR / 'templates'
 VERSION_FILE = PROJECT_DIR / 'VERSION'
@@ -240,95 +244,165 @@ config = Config()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DATABASE
+# GEOLOCATION DATABASE (geo.db)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def init_database():
+# Database settings (loaded from config)
+geo_db_enabled = False
+geo_db_auto_update = True
+
+def init_geo_database():
+    """Initialize the geolocation database with full schema"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(GEO_DB_FILE)
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS peers_geo (
+        CREATE TABLE IF NOT EXISTS geo_cache (
             ip TEXT PRIMARY KEY,
-            network_type TEXT,
-            geo_status INTEGER DEFAULT 0,
-            geo_retry_count INTEGER DEFAULT 0,
-            geo_last_lookup INTEGER,
+            continent TEXT,
+            continentCode TEXT,
             country TEXT,
-            country_code TEXT,
+            countryCode TEXT,
             region TEXT,
-            region_name TEXT,
+            regionName TEXT,
             city TEXT,
             district TEXT,
+            zip TEXT,
             lat REAL,
             lon REAL,
+            timezone TEXT,
+            utc_offset INTEGER,
+            currency TEXT,
             isp TEXT,
+            org TEXT,
             as_info TEXT,
-            hosting INTEGER,
-            first_seen INTEGER,
-            last_seen INTEGER,
-            connection_count INTEGER DEFAULT 1
+            asname TEXT,
+            mobile INTEGER DEFAULT 0,
+            proxy INTEGER DEFAULT 0,
+            hosting INTEGER DEFAULT 0,
+            last_updated INTEGER
         )
     ''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_geo_country ON geo_cache(countryCode)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_geo_updated ON geo_cache(last_updated)')
     conn.commit()
     conn.close()
 
 
-def get_peer_geo(ip: str) -> Optional[dict]:
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.execute('SELECT * FROM peers_geo WHERE ip = ?', (ip,))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row) if row else None
+def check_geo_db_integrity() -> tuple:
+    """Check database integrity. Returns (is_ok, message)"""
+    if not GEO_DB_FILE.exists():
+        return (True, "Database does not exist yet")
+    try:
+        conn = sqlite3.connect(GEO_DB_FILE)
+        cursor = conn.execute("PRAGMA integrity_check")
+        result = cursor.fetchone()[0]
+        conn.close()
+        if result == "ok":
+            return (True, "Database integrity OK")
+        else:
+            return (False, f"Integrity check failed: {result}")
+    except Exception as e:
+        return (False, f"Error checking database: {str(e)}")
 
 
-def upsert_peer_geo(ip: str, network_type: str, geo_status: int, **kwargs):
-    now = int(time.time())
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute('''
-        INSERT INTO peers_geo (ip, network_type, geo_status, geo_last_lookup,
-            country, country_code, region, region_name, city, district,
-            lat, lon, isp, as_info, hosting, first_seen, last_seen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(ip) DO UPDATE SET
-            geo_status = excluded.geo_status,
-            geo_last_lookup = excluded.geo_last_lookup,
-            country = COALESCE(NULLIF(excluded.country, ''), country),
-            country_code = COALESCE(NULLIF(excluded.country_code, ''), country_code),
-            region = COALESCE(NULLIF(excluded.region, ''), region),
-            region_name = COALESCE(NULLIF(excluded.region_name, ''), region_name),
-            city = COALESCE(NULLIF(excluded.city, ''), city),
-            lat = CASE WHEN excluded.lat != 0 THEN excluded.lat ELSE lat END,
-            lon = CASE WHEN excluded.lon != 0 THEN excluded.lon ELSE lon END,
-            isp = COALESCE(NULLIF(excluded.isp, ''), isp),
-            as_info = COALESCE(NULLIF(excluded.as_info, ''), as_info),
-            hosting = excluded.hosting,
-            last_seen = excluded.last_seen
-    ''', (ip, network_type, geo_status, now,
-          kwargs.get('country', ''), kwargs.get('country_code', ''),
-          kwargs.get('region', ''), kwargs.get('region_name', ''),
-          kwargs.get('city', ''), kwargs.get('district', ''),
-          kwargs.get('lat', 0), kwargs.get('lon', 0),
-          kwargs.get('isp', ''), kwargs.get('as_info', ''),
-          kwargs.get('hosting', 0), now, now))
-    conn.commit()
-    conn.close()
+def get_geo_db_stats() -> dict:
+    """Get statistics about the geo database"""
+    if not GEO_DB_FILE.exists():
+        return {'entries': 0, 'size_mb': 0, 'last_updated': None}
+    try:
+        conn = sqlite3.connect(GEO_DB_FILE)
+        cursor = conn.execute('SELECT COUNT(*) FROM geo_cache')
+        count = cursor.fetchone()[0]
+        cursor = conn.execute('SELECT MAX(last_updated) FROM geo_cache')
+        last = cursor.fetchone()[0]
+        conn.close()
+        size_mb = GEO_DB_FILE.stat().st_size / (1024 * 1024)
+        return {'entries': count, 'size_mb': round(size_mb, 2), 'last_updated': last}
+    except:
+        return {'entries': 0, 'size_mb': 0, 'last_updated': None}
 
 
-def get_db_stats() -> dict:
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.execute('''
-        SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN geo_status = 0 THEN 1 ELSE 0 END) as geo_ok,
-            SUM(CASE WHEN geo_status = 1 THEN 1 ELSE 0 END) as private,
-            SUM(CASE WHEN geo_status = 2 THEN 1 ELSE 0 END) as unavailable
-        FROM peers_geo
-    ''')
-    row = cursor.fetchone()
-    conn.close()
-    return {'total': row[0] or 0, 'geo_ok': row[1] or 0,
-            'private': row[2] or 0, 'unavailable': row[3] or 0}
+def get_geo_from_db(ip: str) -> Optional[dict]:
+    """Look up IP in geo database"""
+    if not geo_db_enabled or not GEO_DB_FILE.exists():
+        return None
+    try:
+        conn = sqlite3.connect(GEO_DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute('SELECT * FROM geo_cache WHERE ip = ?', (ip,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except:
+        return None
+
+
+def save_geo_to_db(ip: str, data: dict):
+    """Save geo data to database"""
+    if not geo_db_enabled:
+        return
+    try:
+        now = int(time.time())
+        conn = sqlite3.connect(GEO_DB_FILE)
+        conn.execute('''
+            INSERT INTO geo_cache (
+                ip, continent, continentCode, country, countryCode,
+                region, regionName, city, district, zip,
+                lat, lon, timezone, utc_offset, currency,
+                isp, org, as_info, asname, mobile, proxy, hosting, last_updated
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ip) DO UPDATE SET
+                continent = excluded.continent,
+                continentCode = excluded.continentCode,
+                country = excluded.country,
+                countryCode = excluded.countryCode,
+                region = excluded.region,
+                regionName = excluded.regionName,
+                city = excluded.city,
+                district = excluded.district,
+                zip = excluded.zip,
+                lat = excluded.lat,
+                lon = excluded.lon,
+                timezone = excluded.timezone,
+                utc_offset = excluded.utc_offset,
+                currency = excluded.currency,
+                isp = excluded.isp,
+                org = excluded.org,
+                as_info = excluded.as_info,
+                asname = excluded.asname,
+                mobile = excluded.mobile,
+                proxy = excluded.proxy,
+                hosting = excluded.hosting,
+                last_updated = excluded.last_updated
+        ''', (
+            ip,
+            data.get('continent', ''),
+            data.get('continentCode', ''),
+            data.get('country', ''),
+            data.get('countryCode', ''),
+            data.get('region', ''),
+            data.get('regionName', ''),
+            data.get('city', ''),
+            data.get('district', ''),
+            data.get('zip', ''),
+            data.get('lat', 0),
+            data.get('lon', 0),
+            data.get('timezone', ''),
+            data.get('offset', 0),
+            data.get('currency', ''),
+            data.get('isp', ''),
+            data.get('org', ''),
+            data.get('as', ''),
+            data.get('asname', ''),
+            1 if data.get('mobile', False) else 0,
+            1 if data.get('proxy', False) else 0,
+            1 if data.get('hosting', False) else 0,
+            now
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving to geo database: {e}")
 
 
 def refresh_addrman_cache():
@@ -461,9 +535,9 @@ def kill_existing_dashboard():
     import os
     my_pid = os.getpid()
     try:
-        # Find Python processes running server.py
+        # Find Python processes running MBCoreServer.py
         result = subprocess.run(
-            ['pgrep', '-f', 'python.*server\\.py'],
+            ['pgrep', '-f', 'python.*MBCoreServer\\.py'],
             capture_output=True, text=True
         )
         if result.returncode == 0:
@@ -528,7 +602,7 @@ def fetch_geo_api(ip: str) -> Optional[dict]:
 
 
 def geo_worker():
-    """Background thread for geo lookups - stores in SESSION CACHE (not DB)"""
+    """Background thread for geo lookups - checks DB first, then API, stores in both"""
     global geo_pending_count
     while not stop_flag.is_set():
         try:
@@ -536,7 +610,20 @@ def geo_worker():
         except queue.Empty:
             continue
 
-        data = fetch_geo_api(ip)
+        data = None
+        from_db = False
+
+        # First check the geo database
+        db_data = get_geo_from_db(ip)
+        if db_data:
+            data = db_data
+            from_db = True
+        else:
+            # Not in database, call the API
+            data = fetch_geo_api(ip)
+            if data:
+                # Save to database for future lookups
+                save_geo_to_db(ip, data)
 
         # Store in SESSION CACHE (fast in-memory lookup)
         with geo_cache_lock:
@@ -550,9 +637,20 @@ def geo_worker():
                     'region': data.get('region', ''),
                     'regionName': data.get('regionName', ''),
                     'city': data.get('city', ''),
+                    'district': data.get('district', ''),
+                    'zip': data.get('zip', ''),
                     'lat': data.get('lat', 0),
                     'lon': data.get('lon', 0),
+                    'timezone': data.get('timezone', ''),
+                    'offset': data.get('utc_offset') if from_db else data.get('offset', 0),
+                    'currency': data.get('currency', ''),
                     'isp': data.get('isp', ''),
+                    'org': data.get('org', ''),
+                    'as': data.get('as_info') if from_db else data.get('as', ''),
+                    'asname': data.get('asname', ''),
+                    'mobile': data.get('mobile', False),
+                    'proxy': data.get('proxy', False),
+                    'hosting': data.get('hosting', False),
                 }
             else:
                 geo_cache[ip] = {
@@ -560,7 +658,11 @@ def geo_worker():
                     'continent': '', 'continentCode': '',
                     'country': '', 'countryCode': '',
                     'region': '', 'regionName': '',
-                    'city': '', 'lat': 0, 'lon': 0, 'isp': '',
+                    'city': '', 'district': '', 'zip': '',
+                    'lat': 0, 'lon': 0,
+                    'timezone': '', 'offset': 0, 'currency': '',
+                    'isp': '', 'org': '', 'as': '', 'asname': '',
+                    'mobile': False, 'proxy': False, 'hosting': False,
                 }
 
         with pending_lock:
@@ -571,7 +673,10 @@ def geo_worker():
             geo_pending_count = len(pending_lookups)
 
         broadcast_update('geo_update', {'ip': ip})
-        time.sleep(GEO_API_DELAY)
+
+        # Only delay if we called the API (not when loading from DB)
+        if not from_db:
+            time.sleep(GEO_API_DELAY)
 
 
 def get_cached_geo(ip: str) -> dict:
@@ -588,7 +693,11 @@ def set_cached_geo_private(ip: str):
             'continent': '', 'continentCode': '',
             'country': '', 'countryCode': '',
             'region': '', 'regionName': '',
-            'city': '', 'lat': 0, 'lon': 0, 'isp': '',
+            'city': '', 'district': '', 'zip': '',
+            'lat': 0, 'lon': 0,
+            'timezone': '', 'offset': 0, 'currency': '',
+            'isp': '', 'org': '', 'as': '', 'asname': '',
+            'mobile': False, 'proxy': False, 'hosting': False,
         }
 
 
@@ -837,7 +946,20 @@ async def api_peers():
             'lon': geo.get('lon', 0) if geo else 0,
             'isp': geo.get('isp', '') if geo else '',
 
-            # 23: addrman status
+            # New geo columns (from expanded API)
+            'district': geo.get('district', '') if geo else '',
+            'zip': geo.get('zip', '') if geo else '',
+            'timezone': geo.get('timezone', '') if geo else '',
+            'offset': geo.get('offset', 0) if geo else 0,
+            'currency': geo.get('currency', '') if geo else '',
+            'org': geo.get('org', '') if geo else '',
+            'as': geo.get('as', '') if geo else '',
+            'asname': geo.get('asname', '') if geo else '',
+            'mobile': geo.get('mobile', False) if geo else False,
+            'proxy': geo.get('proxy', False) if geo else False,
+            'hosting': geo.get('hosting', False) if geo else False,
+
+            # Addrman status
             'in_addrman': is_in_addrman(ip),
 
             # Extra fields for UI
@@ -1352,12 +1474,19 @@ def get_manual_port() -> int:
 
 
 def main():
-    # Initialize
-    init_database()
+    global geo_db_enabled, geo_db_auto_update
 
     if not config.load():
         print("Error: Configuration not found. Run ./da.sh first to configure.")
         sys.exit(1)
+
+    # Load geo database settings from config
+    geo_db_enabled = config.get('GEO_DB_ENABLED', 'false').lower() == 'true'
+    geo_db_auto_update = config.get('GEO_DB_AUTO_UPDATE', 'true').lower() == 'true'
+
+    # Initialize geo database if enabled
+    if geo_db_enabled:
+        init_geo_database()
 
     # Kill any existing dashboard processes that might be holding the port
     kill_existing_dashboard()

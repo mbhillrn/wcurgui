@@ -16,16 +16,9 @@
 | `bitcoin-cli` | RPC interface to bitcoind | Part of Bitcoin Core installation |
 | `bitcoind` | Bitcoin daemon | Must be running for full functionality |
 
-### Optional (for enhanced features)
-| Tool | Purpose | Install Command |
-|------|---------|-----------------|
-| `ss` or `netstat` | Network connection info | `sudo apt install iproute2` |
-| `bc` | Math calculations | `sudo apt install bc` |
-
 ## Detection Notes
 - The program will auto-detect missing prerequisites on startup
 - You will be prompted to install any missing required tools
-- Optional tools enhance functionality but are not required
 
 ## Database
 - Peer geo-location data is cached in SQLite at `~/.local/share/mbtc-dash/peers.db`

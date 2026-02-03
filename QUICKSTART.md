@@ -189,7 +189,7 @@ The tunnel forwards your local port 58333 to the headless machine's port 58333. 
 | Item | Location/Value |
 |------|----------------|
 | Main script | `./da.sh` |
-| Web server | `web/server.py` (FastAPI + Uvicorn) |
+| Web server | `web/MBCoreServer.py` (FastAPI + Uvicorn) |
 | **Default Port** | **58333** (configurable via `p) Port Settings` in main menu) |
 | Config | `data/config.conf` (auto-generated) |
 | Peer cache DB | `data/peers.db` (SQLite) |

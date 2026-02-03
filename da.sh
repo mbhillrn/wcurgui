@@ -17,7 +17,7 @@ source "$MBTC_DIR/lib/config.sh"
 
 # Read version from VERSION file
 VERSION=$(cat "$MBTC_DIR/VERSION" 2>/dev/null || echo "0.0.0")
-GITHUB_REPO="mbhillrn/MBCore-Dashboard"
+GITHUB_REPO="mbhillrn/Bitcoin-Core-Peer-Map"
 GITHUB_VERSION_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/VERSION"
 UPDATE_AVAILABLE=0
 LATEST_VERSION=""
@@ -176,7 +176,7 @@ run_web_dashboard() {
 
     # Run web server using venv
     clear
-    "$VENV_PYTHON" "$MBTC_DIR/web/server.py"
+    "$VENV_PYTHON" "$MBTC_DIR/web/MBCoreServer.py"
 }
 
 run_detection() {

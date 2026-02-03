@@ -27,12 +27,15 @@ let autoSizedColumns = false;
 let changesColumnWidths = {};
 
 // All available columns (for reference)
+// Original columns first, then new geo columns alphabetized
 const allColumns = [
     'id', 'network', 'ip', 'port', 'direction', 'subver',
     'city', 'region', 'regionName', 'country', 'countryCode', 'continent', 'continentCode',
     'bytessent', 'bytesrecv', 'ping_ms', 'conntime', 'connection_type', 'services_abbrev',
     'lat', 'lon', 'isp',
-    'in_addrman'
+    'in_addrman',
+    // New geo columns (alphabetized, unchecked by default)
+    'asinfo', 'asname', 'currency', 'district', 'hosting', 'mobile', 'offset', 'org', 'proxy', 'timezone', 'zip'
 ];
 
 // Default visible columns in user's preferred order (id first, connection_type replaces direction)
@@ -72,7 +75,19 @@ const columnLabels = {
     'lat': 'Lat',
     'lon': 'Lon',
     'isp': 'ISP',
-    'in_addrman': 'In Addrman?'
+    'in_addrman': 'In Addrman?',
+    // New geo columns (alphabetized)
+    'asinfo': 'AS',
+    'asname': 'asname',
+    'currency': 'currency',
+    'district': 'district',
+    'hosting': 'hosting',
+    'mobile': 'mobile',
+    'offset': 'offset',
+    'org': 'org',
+    'proxy': 'proxy',
+    'timezone': 'timezone',
+    'zip': 'zip'
 };
 
 // DOM Elements
@@ -1416,21 +1431,33 @@ function renderPeers() {
             geoDisplay = {
                 city: 'Private', region: 'Private', regionName: 'Private',
                 country: 'Private', countryCode: 'Priv', continent: 'Private',
-                continentCode: 'Priv', lat: '-', lon: '-', isp: 'Private'
+                continentCode: 'Priv', lat: '-', lon: '-', isp: 'Private',
+                district: 'Private', zip: 'Private', timezone: 'Private',
+                offset: '-', currency: 'Private', org: 'Private',
+                asinfo: 'Private', asname: 'Private',
+                mobile: '-', proxy: '-', hosting: '-'
             };
         } else if (peer.location_status === 'unavailable') {
             geoClass = 'location-unavailable';
             geoDisplay = {
                 city: 'N/A', region: 'N/A', regionName: 'N/A',
                 country: 'N/A', countryCode: 'N/A', continent: 'N/A',
-                continentCode: 'N/A', lat: '-', lon: '-', isp: 'N/A'
+                continentCode: 'N/A', lat: '-', lon: '-', isp: 'N/A',
+                district: 'N/A', zip: 'N/A', timezone: 'N/A',
+                offset: '-', currency: 'N/A', org: 'N/A',
+                asinfo: 'N/A', asname: 'N/A',
+                mobile: '-', proxy: '-', hosting: '-'
             };
         } else if (peer.location_status === 'pending') {
             geoClass = 'location-pending';
             geoDisplay = {
                 city: 'Stalking...', region: 'Stalking...', regionName: 'Stalking...',
                 country: 'Stalking...', countryCode: '...', continent: 'Stalking...',
-                continentCode: '...', lat: '-', lon: '-', isp: 'Stalking...'
+                continentCode: '...', lat: '-', lon: '-', isp: 'Stalking...',
+                district: '...', zip: '...', timezone: '...',
+                offset: '-', currency: '...', org: '...',
+                asinfo: '...', asname: '...',
+                mobile: '-', proxy: '-', hosting: '-'
             };
         } else {
             // Normal display - use actual values
@@ -1444,7 +1471,18 @@ function renderPeers() {
                 continentCode: peer.continentCode || '-',
                 lat: peer.lat ? peer.lat.toFixed(2) : '-',
                 lon: peer.lon ? peer.lon.toFixed(2) : '-',
-                isp: peer.isp || '-'
+                isp: peer.isp || '-',
+                district: peer.district || '-',
+                zip: peer.zip || '-',
+                timezone: peer.timezone || '-',
+                offset: peer.offset != null ? peer.offset : '-',
+                currency: peer.currency || '-',
+                org: peer.org || '-',
+                asinfo: peer.as || '-',
+                asname: peer.asname || '-',
+                mobile: peer.mobile ? 'Yes' : 'No',
+                proxy: peer.proxy ? 'Yes' : 'No',
+                hosting: peer.hosting ? 'Yes' : 'No'
             };
         }
 
@@ -1497,7 +1535,19 @@ function renderPeers() {
             'lat': { class: `${geoClass} ${netTextClass}`, title: `Latitude: ${geoDisplay.lat}`, content: geoDisplay.lat },
             'lon': { class: `${geoClass} ${netTextClass}`, title: `Longitude: ${geoDisplay.lon}`, content: geoDisplay.lon },
             'isp': { class: `${geoClass} ${netTextClass}`, title: `ISP: ${geoDisplay.isp}`, content: geoDisplay.isp },
-            'in_addrman': { class: addrmanClass, title: `In Address Manager: ${inAddrman}`, content: inAddrman }
+            'in_addrman': { class: addrmanClass, title: `In Address Manager: ${inAddrman}`, content: inAddrman },
+            // New geo columns
+            'asinfo': { class: `${geoClass} ${netTextClass}`, title: `AS: ${geoDisplay.asinfo}`, content: geoDisplay.asinfo },
+            'asname': { class: `${geoClass} ${netTextClass}`, title: `AS Name: ${geoDisplay.asname}`, content: geoDisplay.asname },
+            'currency': { class: `${geoClass} ${netTextClass}`, title: `Currency: ${geoDisplay.currency}`, content: geoDisplay.currency },
+            'district': { class: `${geoClass} ${netTextClass}`, title: `District: ${geoDisplay.district}`, content: geoDisplay.district },
+            'hosting': { class: `${geoClass} ${netTextClass}`, title: `Hosting: ${geoDisplay.hosting}`, content: geoDisplay.hosting },
+            'mobile': { class: `${geoClass} ${netTextClass}`, title: `Mobile: ${geoDisplay.mobile}`, content: geoDisplay.mobile },
+            'offset': { class: `${geoClass} ${netTextClass}`, title: `UTC Offset: ${geoDisplay.offset}`, content: geoDisplay.offset },
+            'org': { class: `${geoClass} ${netTextClass}`, title: `Organization: ${geoDisplay.org}`, content: geoDisplay.org },
+            'proxy': { class: `${geoClass} ${netTextClass}`, title: `Proxy: ${geoDisplay.proxy}`, content: geoDisplay.proxy },
+            'timezone': { class: `${geoClass} ${netTextClass}`, title: `Timezone: ${geoDisplay.timezone}`, content: geoDisplay.timezone },
+            'zip': { class: `${geoClass} ${netTextClass}`, title: `ZIP/Postal: ${geoDisplay.zip}`, content: geoDisplay.zip }
         };
 
         // Build cells in column order

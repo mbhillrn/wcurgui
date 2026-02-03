@@ -364,13 +364,6 @@ All dependencies are automatically detected on startup. If anything is missing, 
 | `vmstat` | System statistics for CPU monitoring |
 | `awk` | Text processing for system stats |
 
-### System Tools (Optional)
-
-| Tool | Purpose |
-|------|---------|
-| `ss` | Socket statistics for network info |
-| `bc` | Calculator for math operations |
-
 ### Bitcoin Core
 
 | Tool | Purpose |

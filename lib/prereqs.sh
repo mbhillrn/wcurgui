@@ -23,8 +23,6 @@ declare -a PREREQS=(
     "python3|Python interpreter for dashboard|apt install -y python3|dnf install -y python3|pacman -S --noconfirm python|1"
     "vmstat|System stats for CPU/memory|apt install -y procps|dnf install -y procps-ng|pacman -S --noconfirm procps-ng|1"
     "awk|Text processing for stats|apt install -y gawk|dnf install -y gawk|pacman -S --noconfirm gawk|1"
-    "ss|Socket statistics (network info)|apt install -y iproute2|dnf install -y iproute|pacman -S --noconfirm iproute2|0"
-    "bc|Calculator for math operations|apt install -y bc|dnf install -y bc|pacman -S --noconfirm bc|0"
 )
 
 # Bitcoin-specific (checked separately)
