@@ -201,6 +201,7 @@ class Config:
         self.datadir = ""
         self.conf = ""
         self.network = "main"
+        self._raw_config = {}  # Store all config values
 
     def load(self) -> bool:
         if not CONFIG_FILE.exists():
@@ -213,6 +214,7 @@ class Config:
                         continue
                     key, value = line.split('=', 1)
                     value = value.strip('"').strip("'")
+                    self._raw_config[key] = value
                     if key == 'MBTC_CLI_PATH':
                         self.cli_path = value
                     elif key == 'MBTC_DATADIR':
@@ -224,6 +226,10 @@ class Config:
             return bool(self.cli_path)
         except Exception:
             return False
+
+    def get(self, key: str, default: str = '') -> str:
+        """Get a config value by key with optional default"""
+        return self._raw_config.get(key, default)
 
     def get_cli_command(self) -> list:
         cmd = [self.cli_path]

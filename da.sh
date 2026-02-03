@@ -650,23 +650,31 @@ show_first_run_db_setup() {
             set_config "GEO_DB_AUTO_UPDATE" "true"
             set_config "GEO_DB_CONFIGURED" "true"
             msg_ok "Database enabled with auto-updates"
+            echo ""
+            msg_info "Checking for Bitcoin Node GeoIP Dataset..."
+            # TODO: Implement actual download
+            sleep 1
+            msg_warn "Bitcoin Node GeoIP Dataset is not currently available"
+            echo -e "  ${T_DIM}Will attempt again on dashboard startup.${RST}"
+            echo -e "  ${T_DIM}Your local database will cache peers you discover.${RST}"
             ;;
         2)
             set_config "GEO_DB_ENABLED" "true"
             set_config "GEO_DB_AUTO_UPDATE" "false"
             set_config "GEO_DB_CONFIGURED" "true"
             msg_ok "Database enabled (self-managed)"
+            echo -e "  ${T_DIM}Your database will cache peers you discover.${RST}"
+            echo -e "  ${T_DIM}Turn on auto-updates via: Geo/IP Database Settings (option g)${RST}"
             ;;
         3)
             set_config "GEO_DB_ENABLED" "false"
             set_config "GEO_DB_AUTO_UPDATE" "false"
             set_config "GEO_DB_CONFIGURED" "true"
             msg_info "Database disabled - using API only"
+            echo -e "  ${T_DIM}Enable anytime via: Geo/IP Database Settings (option g)${RST}"
             ;;
     esac
 
-    echo ""
-    echo -e "  ${T_DIM}You can change this anytime via: Geo/IP Database Settings (option g)${RST}"
     echo ""
     echo -en "${T_DIM}Press Enter to continue...${RST}"
     read -r
