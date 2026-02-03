@@ -289,6 +289,7 @@ def init_geo_database():
     ''')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_geo_country ON geo_cache(countryCode)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_geo_updated ON geo_cache(last_updated)')
+    conn.execute('PRAGMA journal_mode=WAL')
     conn.commit()
     conn.close()
 
@@ -357,7 +358,7 @@ def save_geo_to_db(ip: str, data: dict):
         return
     try:
         now = int(time.time())
-        conn = sqlite3.connect(GEO_DB_FILE)
+        conn = sqlite3.connect(GEO_DB_FILE, timeout=10)
         conn.execute('''
             INSERT INTO geo_cache (
                 ip, continent, continentCode, country, countryCode,
@@ -1480,7 +1481,7 @@ async def api_geodb_update():
             tmp_path.rename(GEO_DB_FILE)
             return {'success': True, 'message': f'Downloaded database ({remote_count} entries)'}
         # Merge: add new entries from remote without overwriting local data
-        conn = sqlite3.connect(GEO_DB_FILE)
+        conn = sqlite3.connect(GEO_DB_FILE, timeout=30)
         conn.execute(f"ATTACH '{tmp_path}' AS remote")
         conn.execute("INSERT OR IGNORE INTO geo_cache SELECT * FROM remote.geo_cache")
         new_count = conn.execute("SELECT changes()").fetchone()[0]
