@@ -571,9 +571,9 @@ html, body {
     width: 100%;
 }
 
-/* Stretched map mode - vertically stretches tiles to show more latitude range */
+/* Stretched map mode - horizontally stretches tiles to show more of the world */
 .map-container.map-stretched {
-    transform: scaleY(2.2);
+    transform: scaleX(1.5);
     transform-origin: center center;
 }
 

@@ -811,6 +811,8 @@ function setupMapDisplayMode() {
     select.addEventListener('change', () => {
         const mode = select.value;
         initMap(mode);
+        // Fit all nodes after map mode change
+        setTimeout(() => zoomToAllNodes(), 500);
     });
 }
 
@@ -1535,11 +1537,10 @@ async function fetchPeers() {
         renderPeers();
         updateMap();
 
-        // On first load, zoom to fit all nodes
+        // On first load, zoom to fit all nodes after 1 second
         if (!hasInitialMapFit && currentPeers.length > 0) {
             hasInitialMapFit = true;
-            // Small delay to let markers render
-            setTimeout(() => zoomToAllNodes(), 100);
+            setTimeout(() => zoomToAllNodes(), 1000);
         }
 
         // Update status
