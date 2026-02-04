@@ -1010,6 +1010,12 @@ function updateMap() {
                     map.removeLayer(markers[peer.id]);
                     delete markers[peer.id];
                 }
+                // Also remove ghost markers (wrap-points mode)
+                const ghostKey = peer.id + '_ghosts';
+                if (markers[ghostKey]) {
+                    markers[ghostKey].forEach(g => map.removeLayer(g));
+                    delete markers[ghostKey];
+                }
                 return;
             }
             const pos = getStableAntarcticaPosition(peer.addr, network, peer.location_status);
