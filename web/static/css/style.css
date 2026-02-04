@@ -460,6 +460,7 @@ html, body {
     min-height: 450px;
     z-index: 0;
     position: relative;
+    overflow: visible;
 }
 
 .map-header {
@@ -508,6 +509,23 @@ html, body {
 }
 .map-region-selector select:hover { color: var(--text-primary); border-color: var(--accent); }
 
+.map-fit-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.map-fit-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: var(--bg-secondary);
+}
+
 .map-legend {
     display: flex;
     gap: 12px;
@@ -555,7 +573,7 @@ html, body {
 
 /* Stretched map mode - vertically stretches tiles to show more latitude range */
 .map-container.map-stretched {
-    transform: scaleY(1.4);
+    transform: scaleY(2.2);
     transform-origin: center center;
 }
 
@@ -946,7 +964,15 @@ html, body {
     position: relative;
 }
 .network-filter-btn:hover { color: var(--text-secondary); background: var(--bg-tertiary); }
-.network-filter-btn.active { color: var(--text-primary); background: var(--bg-tertiary); font-weight: 700; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.network-filter-btn.active { background: var(--bg-tertiary); font-weight: 700; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Active state keeps network colors but bold */
+.count-total.active { color: var(--text-primary); }
+.count-ipv4.active { color: var(--net-ipv4); }
+.count-ipv6.active { color: var(--net-ipv6); }
+.count-onion.active { color: var(--net-onion); }
+.count-i2p.active { color: var(--net-i2p); }
+.count-cjdns.active { color: var(--net-cjdns); }
 
 .count-sep {
     color: var(--border-primary);

@@ -98,6 +98,9 @@ const connectionStatus = document.getElementById('connection-status');
 const refreshTimerEl = document.getElementById('refresh-timer');
 const changesTbody = document.getElementById('changes-tbody');
 
+// Track if initial map fit has been done
+let hasInitialMapFit = false;
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     // Always start with default columns (no persistence)
@@ -134,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initMap();
     setupMapRegionSelector();
     setupMapDisplayMode();
+    setupMapFitAllButton();
     setupCurrencyDropdown();
     setupToggleChangesPanel();
     setupRestoreAllDefaults();
@@ -807,6 +811,47 @@ function setupMapDisplayMode() {
     select.addEventListener('change', () => {
         const mode = select.value;
         initMap(mode);
+    });
+}
+
+// Zoom map to fit all current peer markers
+function zoomToAllNodes() {
+    if (!map) return;
+
+    // Collect all marker positions (excluding ghost markers)
+    const bounds = [];
+    Object.keys(markers).forEach(key => {
+        if (key.endsWith('_ghosts')) return; // Skip ghost markers
+        const marker = markers[key];
+        if (marker && marker.getLatLng) {
+            bounds.push(marker.getLatLng());
+        }
+    });
+
+    if (bounds.length === 0) {
+        // No markers, show world view
+        map.fitBounds([[-65, -180], [75, 180]], { padding: [20, 20] });
+        return;
+    }
+
+    if (bounds.length === 1) {
+        // Single marker, center on it with reasonable zoom
+        map.setView(bounds[0], 6);
+        return;
+    }
+
+    // Fit to all markers with padding
+    const latLngBounds = L.latLngBounds(bounds);
+    map.fitBounds(latLngBounds, { padding: [30, 30], maxZoom: 10 });
+}
+
+// Setup "Fit All" button
+function setupMapFitAllButton() {
+    const btn = document.getElementById('map-fit-all-btn');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        zoomToAllNodes();
     });
 }
 
@@ -1489,6 +1534,13 @@ async function fetchPeers() {
         currentPeers = await response.json();
         renderPeers();
         updateMap();
+
+        // On first load, zoom to fit all nodes
+        if (!hasInitialMapFit && currentPeers.length > 0) {
+            hasInitialMapFit = true;
+            // Small delay to let markers render
+            setTimeout(() => zoomToAllNodes(), 100);
+        }
 
         // Update status
         statusIndicator.classList.add('connected');
