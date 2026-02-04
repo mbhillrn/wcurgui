@@ -346,7 +346,7 @@ body {
 .card-value-large {
     font-size: 42px;
     font-weight: 700;
-    color: var(--accent-green);
+    color: var(--text-primary);
     line-height: 1;
 }
 
@@ -515,6 +515,111 @@ body {
     height: 1px;
     background: var(--border-color);
     margin: 2px 0;
+}
+
+/* Network Traffic Indicator */
+.net-traffic-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.net-traffic-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.net-traffic-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.net-traffic-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.net-traffic-dir {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-dim);
+    width: 20px;
+    text-align: right;
+}
+
+.net-traffic-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 40px;
+}
+
+.net-traffic-bar {
+    height: 100%;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.8s ease, background-color 0.5s ease;
+}
+
+.net-traffic-bar-in {
+    background: var(--accent-green);
+}
+
+.net-traffic-bar-out {
+    background: var(--accent-red);
+}
+
+/* Adaptive color based on traffic level */
+.net-traffic-bar-in.traffic-low { background: #2ea043; }
+.net-traffic-bar-in.traffic-med { background: #3fb950; }
+.net-traffic-bar-in.traffic-high { background: #56d364; box-shadow: 0 0 4px rgba(63, 185, 80, 0.5); }
+
+.net-traffic-bar-out.traffic-low { background: #da3633; }
+.net-traffic-bar-out.traffic-med { background: #f85149; }
+.net-traffic-bar-out.traffic-high { background: #ff7b72; box-shadow: 0 0 4px rgba(248, 81, 73, 0.5); }
+
+.net-traffic-rate {
+    font-size: 9px;
+    color: var(--text-dim);
+    min-width: 42px;
+    text-align: right;
+    font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+/* Value Change Pulse Animations */
+@keyframes pulse-green {
+    0% { color: var(--accent-green); text-shadow: 0 0 6px rgba(63, 185, 80, 0.7); }
+    100% { color: inherit; text-shadow: none; }
+}
+
+@keyframes pulse-red {
+    0% { color: var(--accent-red); text-shadow: 0 0 6px rgba(248, 81, 73, 0.7); }
+    100% { color: inherit; text-shadow: none; }
+}
+
+.pulse-up {
+    animation: pulse-green 1.5s ease-out;
+}
+
+.pulse-down {
+    animation: pulse-red 1.5s ease-out;
+}
+
+/* CPU/Memory threshold colors */
+.system-value.threshold-warn {
+    color: var(--accent-yellow) !important;
+}
+
+.system-value.threshold-critical {
+    color: var(--accent-red) !important;
 }
 
 /* Geo DB section in System card */

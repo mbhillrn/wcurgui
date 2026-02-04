@@ -1126,6 +1126,7 @@ async function fetchStats() {
 
         // Connected count
         document.getElementById('stat-connected').textContent = stats.connected || 0;
+        pulseOnChange('stat-connected', stats.connected || 0);
 
         // Update peer header total count (with "all" prefix)
         const countTotal = document.getElementById('count-total');
@@ -1158,8 +1159,14 @@ async function fetchStats() {
                     wrap.classList.remove('not-configured');
                     const netData = networks[net] || {in: 0, out: 0};
                     const total = netData.in + netData.out;
-                    if (inEl) inEl.textContent = netData.in;
-                    if (outEl) outEl.textContent = netData.out;
+                    if (inEl) {
+                        inEl.textContent = netData.in;
+                        pulseOnChange(`stat-${net}-in`, netData.in);
+                    }
+                    if (outEl) {
+                        outEl.textContent = netData.out;
+                        pulseOnChange(`stat-${net}-out`, netData.out);
+                    }
                     if (totalEl) totalEl.textContent = `(${total})`;
 
                     // Update peer header counts
@@ -2007,7 +2014,9 @@ function updateInfoPanel(data) {
     const priceEl = document.getElementById('info-btc-price');
     const currencyEl = document.getElementById('info-btc-currency');
     if (priceEl) {
-        priceEl.textContent = '$' + formatPrice(data.btc_price, data.btc_currency);
+        const formattedPrice = '$' + formatPrice(data.btc_price, data.btc_currency);
+        priceEl.textContent = formattedPrice;
+        pulseOnChange('info-btc-price', data.btc_price);
     }
     if (currencyEl) {
         currencyEl.textContent = data.btc_currency || 'USD';
@@ -2018,6 +2027,7 @@ function updateInfoPanel(data) {
     if (blockEl && data.last_block) {
         const timeStr = formatBlockTime(data.last_block.time);
         blockEl.textContent = `${timeStr} (${data.last_block.height.toLocaleString()})`;
+        pulseOnChange('info-last-block', data.last_block.height);
     }
 
     // Node Info Card
@@ -2051,28 +2061,49 @@ function updateInfoPanel(data) {
             ipv4El.textContent = data.network_scores.ipv4 !== null
                 ? data.network_scores.ipv4.toLocaleString()
                 : '-';
+            if (data.network_scores.ipv4 !== null) {
+                pulseOnChange('info-score-ipv4', data.network_scores.ipv4);
+            }
         }
         if (ipv6El) {
             ipv6El.textContent = data.network_scores.ipv6 !== null
                 ? data.network_scores.ipv6.toLocaleString()
                 : '-';
+            if (data.network_scores.ipv6 !== null) {
+                pulseOnChange('info-score-ipv6', data.network_scores.ipv6);
+            }
         }
     }
 
-    // System Stats
+    // System Stats with threshold coloring
     const cpuEl = document.getElementById('info-cpu');
     const memEl = document.getElementById('info-mem');
     if (data.system_stats) {
         if (cpuEl) {
-            cpuEl.textContent = data.system_stats.cpu_pct !== null
-                ? data.system_stats.cpu_pct
-                : '-';
+            const cpuVal = data.system_stats.cpu_pct;
+            cpuEl.textContent = cpuVal !== null ? cpuVal : '-';
+            // Threshold coloring: >90% red, >75% yellow
+            cpuEl.classList.remove('threshold-critical', 'threshold-warn');
+            if (cpuVal !== null) {
+                if (cpuVal >= 90) cpuEl.classList.add('threshold-critical');
+                else if (cpuVal >= 75) cpuEl.classList.add('threshold-warn');
+            }
         }
         if (memEl) {
-            memEl.textContent = data.system_stats.mem_pct !== null
-                ? data.system_stats.mem_pct
-                : '-';
+            const memVal = data.system_stats.mem_pct;
+            memEl.textContent = memVal !== null ? memVal : '-';
+            // Threshold coloring: >90% red, >80% yellow
+            memEl.classList.remove('threshold-critical', 'threshold-warn');
+            if (memVal !== null) {
+                if (memVal >= 90) memEl.classList.add('threshold-critical');
+                else if (memVal >= 80) memEl.classList.add('threshold-warn');
+            }
         }
+    }
+
+    // Network traffic indicator
+    if (data.net_totals) {
+        updateNetTraffic(data.net_totals);
     }
 
     // Geo DB Status (inside System card)
@@ -2088,6 +2119,7 @@ function updateInfoPanel(data) {
             geodbStatusEl.textContent = g.entries.toLocaleString() + ' entries';
             geodbStatusEl.className = 'geodb-status-badge';
             geodbStatusEl.title = '';
+            pulseOnChange('info-geodb-status', g.entries);
             if (geodbInfoBtn) geodbInfoBtn.style.display = '';
             if (geodbUpdateBtn) geodbUpdateBtn.style.display = '';
         } else if (g.status === 'ok' && g.entries === 0) {
@@ -3021,3 +3053,123 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NETWORK TRAFFIC INDICATOR WITH ADAPTIVE THRESHOLDS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Previous sample for calculating deltas
+let prevNetTotals = null;
+
+// Rolling history for adaptive thresholds (keep last 30 samples)
+const NET_HISTORY_SIZE = 30;
+let netHistoryIn = [];
+let netHistoryOut = [];
+
+// Format bytes/sec to human readable rate
+function formatRate(bytesPerSec) {
+    if (bytesPerSec < 0 || isNaN(bytesPerSec)) return '-';
+    if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s';
+    if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + ' KB/s';
+    return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
+}
+
+// Get adaptive max from rolling history (use 90th percentile as "full bar")
+function getAdaptiveMax(history) {
+    if (history.length < 2) return 50 * 1024; // Default 50 KB/s until we have data
+    const sorted = [...history].sort((a, b) => a - b);
+    // Use 90th percentile, but always at least 10 KB/s to avoid tiny values filling the bar
+    const p90Index = Math.floor(sorted.length * 0.9);
+    const p90 = sorted[p90Index] || sorted[sorted.length - 1];
+    return Math.max(p90 * 1.2, 10 * 1024); // 20% headroom, min 10 KB/s
+}
+
+// Update network traffic bars
+function updateNetTraffic(netTotals) {
+    if (!netTotals) return;
+
+    const barIn = document.getElementById('net-traffic-bar-in');
+    const barOut = document.getElementById('net-traffic-bar-out');
+    const rateIn = document.getElementById('net-traffic-rate-in');
+    const rateOut = document.getElementById('net-traffic-rate-out');
+    if (!barIn || !barOut || !rateIn || !rateOut) return;
+
+    if (prevNetTotals) {
+        const dtMs = netTotals.timemillis - prevNetTotals.timemillis;
+        if (dtMs > 0) {
+            const dtSec = dtMs / 1000;
+            const bytesInPerSec = (netTotals.totalbytesrecv - prevNetTotals.totalbytesrecv) / dtSec;
+            const bytesOutPerSec = (netTotals.totalbytessent - prevNetTotals.totalbytessent) / dtSec;
+
+            // Add to rolling history
+            netHistoryIn.push(bytesInPerSec);
+            netHistoryOut.push(bytesOutPerSec);
+            if (netHistoryIn.length > NET_HISTORY_SIZE) netHistoryIn.shift();
+            if (netHistoryOut.length > NET_HISTORY_SIZE) netHistoryOut.shift();
+
+            // Get adaptive maximums
+            const maxIn = getAdaptiveMax(netHistoryIn);
+            const maxOut = getAdaptiveMax(netHistoryOut);
+
+            // Calculate bar widths (0-100%)
+            const pctIn = Math.min(100, (bytesInPerSec / maxIn) * 100);
+            const pctOut = Math.min(100, (bytesOutPerSec / maxOut) * 100);
+
+            barIn.style.width = pctIn + '%';
+            barOut.style.width = pctOut + '%';
+
+            // Set traffic level classes
+            barIn.className = 'net-traffic-bar net-traffic-bar-in' +
+                (pctIn > 70 ? ' traffic-high' : pctIn > 30 ? ' traffic-med' : ' traffic-low');
+            barOut.className = 'net-traffic-bar net-traffic-bar-out' +
+                (pctOut > 70 ? ' traffic-high' : pctOut > 30 ? ' traffic-med' : ' traffic-low');
+
+            // Update rate text
+            rateIn.textContent = formatRate(bytesInPerSec);
+            rateOut.textContent = formatRate(bytesOutPerSec);
+        }
+    }
+
+    prevNetTotals = { ...netTotals };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VALUE CHANGE PULSE ANIMATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Store previous values for comparison
+const prevValues = {};
+
+// Apply a pulse animation to an element when its value changes
+function pulseOnChange(elementId, newValue, opts) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    const numNew = parseFloat(String(newValue).replace(/[^0-9.\-]/g, ''));
+    if (isNaN(numNew)) {
+        prevValues[elementId] = null;
+        return;
+    }
+
+    const prev = prevValues[elementId];
+    prevValues[elementId] = numNew;
+
+    if (prev === null || prev === undefined) return; // First load, no pulse
+    if (numNew === prev) return; // No change
+
+    // Remove any existing animation
+    el.classList.remove('pulse-up', 'pulse-down');
+    // Force reflow to restart animation
+    void el.offsetWidth;
+
+    if (numNew > prev) {
+        el.classList.add('pulse-up');
+    } else {
+        el.classList.add('pulse-down');
+    }
+
+    // Remove class after animation completes
+    setTimeout(() => {
+        el.classList.remove('pulse-up', 'pulse-down');
+    }, 1500);
+}

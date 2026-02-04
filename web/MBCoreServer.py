@@ -1057,7 +1057,8 @@ async def api_info(currency: str = "USD"):
         'blockchain': None,
         'network_scores': None,
         'system_stats': None,
-        'geo_db_stats': None
+        'geo_db_stats': None,
+        'net_totals': None
     }
 
     # 1. Bitcoin price from Coinbase API
@@ -1191,7 +1192,21 @@ async def api_info(currency: str = "USD"):
     except Exception as e:
         print(f"System stats fetch error: {e}")
 
-    # 6. Geo database stats (always returned so frontend can show status)
+    # 6. Network totals from getnettotals (bytes sent/received)
+    try:
+        cmd = config.get_cli_command() + ['getnettotals']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            nettotals = json.loads(r.stdout)
+            result['net_totals'] = {
+                'totalbytesrecv': nettotals.get('totalbytesrecv', 0),
+                'totalbytessent': nettotals.get('totalbytessent', 0),
+                'timemillis': nettotals.get('timemillis', 0)
+            }
+    except Exception as e:
+        print(f"Net totals fetch error: {e}")
+
+    # 7. Geo database stats (always returned so frontend can show status)
     try:
         stats = get_geo_db_stats()
         if stats.get('entries', 0) > 0:
