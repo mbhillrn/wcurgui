@@ -48,7 +48,7 @@
                         Mempool
                     </button>
                     <span class="status-time">
-                        <span class="time-item">Next: <span id="stat-countdown">10s</span></span>
+                        <span class="time-item"><span class="countdown-label">Next Peer<br>Update:</span> <span id="stat-countdown">10s</span></span>
                         <span class="time-sep">|</span>
                         <span class="time-item" id="stat-localtime">--:--:--</span>
                     </span>
@@ -61,15 +61,25 @@
                     <!-- Settings Dropdown -->
                     <div class="node-config-dropdown" id="node-config-dropdown">
                         <div class="dropdown-section">
-                            <span class="dropdown-section-title">Update Frequency</span>
+                            <span class="dropdown-section-title">Peer Update Frequency</span>
                             <div class="dropdown-row">
-                                <input type="text" id="refresh-rate-input" value="10" class="refresh-input" title="Update frequency in seconds">
+                                <input type="text" id="refresh-rate-input" value="10" class="refresh-input" title="Peer update frequency in seconds (min 5s)">
                                 <span class="dropdown-unit">seconds</span>
                             </div>
+                            <div class="dropdown-hint" id="refresh-rate-hint"></div>
                         </div>
                         <div class="dropdown-divider"></div>
                         <div class="dropdown-section">
-                            <span class="dropdown-section-title">BTC Currency</span>
+                            <span class="dropdown-section-title">Bitcoin Price Update</span>
+                            <div class="dropdown-row">
+                                <input type="text" id="price-rate-input" value="10" class="refresh-input" title="Price update frequency in seconds (min 5s)">
+                                <span class="dropdown-unit">seconds</span>
+                            </div>
+                            <div class="dropdown-hint" id="price-rate-hint"></div>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-section">
+                            <span class="dropdown-section-title">Currency</span>
                             <select id="info-currency-select" class="info-currency-select">
                                 <option value="USD">USD</option>
                                 <option value="EUR">EUR</option>
@@ -96,7 +106,7 @@
                                 <input type="checkbox" id="info-show-system" checked> System
                             </label>
                             <label class="dropdown-checkbox">
-                                <input type="checkbox" id="info-show-btc" checked> BTC Price
+                                <input type="checkbox" id="info-show-btc" checked> Bitcoin Price
                             </label>
                         </div>
                     </div>
@@ -119,7 +129,7 @@
                                 <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-ipv4-in">-</span></span>
                                 <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-ipv4-out">-</span></span>
                             </div>
-                            <span class="net-score-label">Score</span>
+                            <span class="net-score-label" id="score-label-ipv4">Score</span>
                             <span class="net-score" id="info-score-ipv4">-</span>
                         </div>
                         <div class="network-col" id="net-ipv6-wrap">
@@ -129,7 +139,7 @@
                                 <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-ipv6-in">-</span></span>
                                 <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-ipv6-out">-</span></span>
                             </div>
-                            <span class="net-score-label">Score</span>
+                            <span class="net-score-label" id="score-label-ipv6">Score</span>
                             <span class="net-score" id="info-score-ipv6">-</span>
                         </div>
                         <div class="network-col" id="net-onion-wrap">
@@ -198,26 +208,6 @@
                             <span class="system-value" id="info-mem">-</span>
                             <span class="system-unit">%</span>
                         </div>
-                        <div class="system-divider"></div>
-                        <div class="net-traffic-section">
-                            <div class="net-traffic-label">Network</div>
-                            <div class="net-traffic-meters">
-                                <div class="net-traffic-row">
-                                    <span class="net-traffic-dir">IN</span>
-                                    <div class="net-traffic-bar-wrap">
-                                        <div class="net-traffic-bar net-traffic-bar-in" id="net-traffic-bar-in"></div>
-                                    </div>
-                                    <span class="net-traffic-rate" id="net-traffic-rate-in">-</span>
-                                </div>
-                                <div class="net-traffic-row">
-                                    <span class="net-traffic-dir">OUT</span>
-                                    <div class="net-traffic-bar-wrap">
-                                        <div class="net-traffic-bar net-traffic-bar-out" id="net-traffic-bar-out"></div>
-                                    </div>
-                                    <span class="net-traffic-rate" id="net-traffic-rate-out">-</span>
-                                </div>
-                            </div>
-                        </div>
                         <div class="system-divider" id="geodb-divider"></div>
                         <div class="geodb-section">
                             <div class="geodb-section-label">Geo/IP DB</div>
@@ -236,9 +226,9 @@
                     </div>
                 </div>
 
-                <!-- BTC Price Card -->
+                <!-- Bitcoin Price Card -->
                 <div class="status-card card-btc" id="card-btc">
-                    <div class="card-label">BTC Price</div>
+                    <div class="card-label">&#8383;itcoin Price</div>
                     <div class="btc-price" id="info-btc-price">-</div>
                     <div class="btc-currency" id="info-btc-currency">USD</div>
                     <div class="btc-block">
@@ -293,6 +283,23 @@
                         <span class="count-i2p network-filter-btn" id="count-i2p" data-filter="i2p" style="display: none;" title="Click to filter by I2P">I2P 0</span>
                         <span class="count-sep" id="sep-i2p" style="display: none;">|</span>
                         <span class="count-cjdns network-filter-btn" id="count-cjdns" data-filter="cjdns" style="display: none;" title="Click to filter by CJDNS">CJDNS 0</span>
+                    </div>
+                    <span class="count-sep net-traffic-sep" id="sep-traffic">|</span>
+                    <div class="net-traffic-inline" id="net-traffic-inline">
+                        <div class="net-traffic-row-inline">
+                            <span class="net-traffic-dir-inline">IN</span>
+                            <div class="net-traffic-bar-wrap-inline">
+                                <div class="net-traffic-bar net-traffic-bar-in" id="net-traffic-bar-in"></div>
+                            </div>
+                            <span class="net-traffic-rate-inline" id="net-traffic-rate-in">-</span>
+                        </div>
+                        <div class="net-traffic-row-inline">
+                            <span class="net-traffic-dir-inline">OUT</span>
+                            <div class="net-traffic-bar-wrap-inline">
+                                <div class="net-traffic-bar net-traffic-bar-out" id="net-traffic-bar-out"></div>
+                            </div>
+                            <span class="net-traffic-rate-inline" id="net-traffic-rate-out">-</span>
+                        </div>
                     </div>
                 </div>
                 <div class="panel-controls">

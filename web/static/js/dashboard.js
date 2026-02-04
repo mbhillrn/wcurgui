@@ -192,7 +192,37 @@ function setupRestoreDefaults() {
                 localStorage.removeItem('mbcore_column_order');
                 localStorage.removeItem('mbcore_column_widths');
                 localStorage.removeItem('mbcore_changes_column_widths');
+                localStorage.removeItem('mbcore_refresh_interval');
+                localStorage.removeItem('mbcore_price_interval');
+                localStorage.removeItem('mbcore_info_currency');
+                localStorage.removeItem('mbcore_card_visibility');
+                localStorage.removeItem('mbcore_changes_window');
             } catch (e) {}
+
+            // Reset refresh rate to default
+            refreshInterval = 10000;
+            const refreshInput = document.getElementById('refresh-rate-input');
+            if (refreshInput) refreshInput.value = 10;
+            resetCountdown();
+
+            // Reset price rate to default
+            priceUpdateInterval = 10000;
+            const priceInput = document.getElementById('price-rate-input');
+            if (priceInput) priceInput.value = 10;
+            startPriceTimer();
+
+            // Reset currency to USD
+            infoCurrency = 'USD';
+            const currencySelect = document.getElementById('info-currency-select');
+            if (currencySelect) currencySelect.value = 'USD';
+
+            // Reset card visibility
+            infoVisibility = { networks: true, chain: true, system: true, btc: true };
+            Object.entries({ 'info-show-networks': 'networks', 'info-show-chain': 'chain', 'info-show-system': 'system', 'info-show-btc': 'btc' }).forEach(([id, key]) => {
+                const cb = document.getElementById(id);
+                if (cb) cb.checked = true;
+            });
+            applyCardVisibility();
 
             // Reset peer table column widths - clear inline styles and set defaults
             const table = document.getElementById('peer-table');
@@ -667,9 +697,29 @@ const NETWORK_COLORS = {
 
 // Update map markers with network colors
 function updateMap() {
-    // Clear existing markers
-    Object.values(markers).forEach(marker => map.removeLayer(marker));
-    markers = {};
+    const prevMarkerIds = new Set(Object.keys(markers).map(Number));
+    const currentIds = new Set(currentPeers.map(p => p.id));
+
+    // Animate and remove disconnected peers
+    prevMarkerIds.forEach(id => {
+        if (!currentIds.has(id) && markers[id]) {
+            const m = markers[id];
+            const el = m.getElement && m.getElement();
+            if (el) {
+                el.style.transition = 'opacity 2s ease';
+                el.style.opacity = '0';
+                // Flash red before fading
+                m.setStyle({ fillColor: '#f85149', color: '#f85149', fillOpacity: 1 });
+                setTimeout(() => {
+                    map.removeLayer(m);
+                    delete markers[id];
+                }, 2000);
+            } else {
+                map.removeLayer(m);
+                delete markers[id];
+            }
+        }
+    });
 
     currentPeers.forEach(peer => {
         let lat, lon;
@@ -677,9 +727,7 @@ function updateMap() {
         const color = NETWORK_COLORS[network] || NETWORK_COLORS['ipv4'];
 
         if (peer.location_status === 'private' || peer.location_status === 'unavailable') {
-            // Private/unavailable locations: show in Antarctica if enabled
-            if (!showAntarcticaDots) return; // Skip if Antarctica dots are hidden
-            // Use stable positions so dots don't move during a connection
+            if (!showAntarcticaDots) return;
             const pos = getStableAntarcticaPosition(peer.addr, network, peer.location_status);
             lat = pos.lat;
             lon = pos.lon;
@@ -687,19 +735,25 @@ function updateMap() {
             lat = peer.lat;
             lon = peer.lon;
         } else {
-            return; // Skip if no location
+            return;
         }
 
+        // If marker already exists, just update position if needed
+        if (markers[peer.id]) {
+            return;
+        }
+
+        const isNew = !prevMarkerIds.has(peer.id);
+
         const marker = L.circleMarker([lat, lon], {
-            radius: 6,
-            fillColor: color,
-            color: '#ffffff',
-            weight: 1,
+            radius: isNew ? 12 : 6,
+            fillColor: isNew ? '#3fb950' : color,
+            color: isNew ? '#3fb950' : '#ffffff',
+            weight: isNew ? 2 : 1,
             opacity: 0.8,
-            fillOpacity: 0.7
+            fillOpacity: isNew ? 0.9 : 0.7
         });
 
-        // Enhanced popup with network info
         const networkLabel = network.toUpperCase();
         const statusLabel = peer.location_status === 'private' ? ' (Private)' :
                            peer.location_status === 'unavailable' ? ' (Unavailable)' : '';
@@ -715,6 +769,19 @@ function updateMap() {
 
         marker.addTo(map);
         markers[peer.id] = marker;
+
+        // Animate new markers: shrink from large green to normal
+        if (isNew) {
+            setTimeout(() => {
+                marker.setRadius(6);
+                marker.setStyle({
+                    fillColor: color,
+                    color: '#ffffff',
+                    weight: 1,
+                    fillOpacity: 0.7
+                });
+            }, 1000);
+        }
     });
 }
 
@@ -1169,11 +1236,18 @@ async function fetchStats() {
                     }
                     if (totalEl) totalEl.textContent = `(${total})`;
 
-                    // Update peer header counts
+                    // Update peer header counts with delta indicator
                     if (countEl) {
                         const total = netData.in + netData.out;
                         countEl.textContent = `${networkLabels[net]} ${total}`;
                         countEl.style.display = '';
+
+                        // Show +N / -N delta indicator
+                        const prevCount = prevNetworkCounts[net];
+                        if (prevCount !== undefined && total !== prevCount) {
+                            showDeltaIndicator(countEl, total - prevCount);
+                        }
+                        prevNetworkCounts[net] = total;
                     }
                     if (sepEl) {
                         sepEl.style.display = '';
@@ -1221,6 +1295,42 @@ async function fetchStats() {
 
         // Update map status indicator
         updateMapStatus(stats.geo_pending || 0);
+
+        // System stats (CPU/mem) now come from /api/stats
+        if (stats.system_stats) {
+            const cpuEl = document.getElementById('info-cpu');
+            const memEl = document.getElementById('info-mem');
+            if (cpuEl) {
+                const cpuVal = stats.system_stats.cpu_pct;
+                cpuEl.textContent = cpuVal !== null ? cpuVal : '-';
+                cpuEl.classList.remove('threshold-critical', 'threshold-warn');
+                if (cpuVal !== null) {
+                    if (cpuVal >= 90) cpuEl.classList.add('threshold-critical');
+                    else if (cpuVal >= 75) cpuEl.classList.add('threshold-warn');
+                    else pulseOnChange('info-cpu', cpuVal, 'white');
+                }
+            }
+            if (memEl) {
+                const memVal = stats.system_stats.mem_pct;
+                memEl.textContent = memVal !== null ? memVal : '-';
+                memEl.classList.remove('threshold-critical', 'threshold-warn');
+                if (memVal !== null) {
+                    if (memVal >= 90) memEl.classList.add('threshold-critical');
+                    else if (memVal >= 80) memEl.classList.add('threshold-warn');
+                    else pulseOnChange('info-mem', memVal, 'white');
+                }
+            }
+        }
+
+        // Geo DB entry count from /api/stats (fast updates)
+        if (stats.geo_entry_count !== undefined) {
+            const geodbStatusEl = document.getElementById('info-geodb-status');
+            if (geodbStatusEl && stats.geo_entry_count > 0) {
+                geodbStatusEl.textContent = stats.geo_entry_count.toLocaleString() + ' entries';
+                pulseOnChange('info-geodb-status', stats.geo_entry_count);
+            }
+        }
+
     } catch (error) {
         console.error('Error fetching stats:', error);
         updateMapStatus(-1); // Error state
@@ -1618,7 +1728,7 @@ function setupRefreshRateControl() {
         const saved = localStorage.getItem('mbcore_refresh_interval');
         if (saved) {
             const interval = parseInt(saved, 10);
-            if (interval >= 1000 && interval <= 300000) { // 1s to 5min
+            if (interval >= 5000 && interval <= 99000) {
                 refreshInterval = interval;
             }
         }
@@ -1627,35 +1737,36 @@ function setupRefreshRateControl() {
     const input = document.getElementById('refresh-rate-input');
     if (!input) return;
 
-    // Set initial value from loaded preference
     input.value = refreshInterval / 1000;
+    const hint = document.getElementById('refresh-rate-hint');
 
-    // Handle input changes (on blur or enter)
     const applyValue = () => {
-        const seconds = parseInt(input.value, 10);
-        if (!isNaN(seconds) && seconds >= 1 && seconds <= 300) {
-            refreshInterval = seconds * 1000;
-
-            // Save preference
-            try {
-                localStorage.setItem('mbcore_refresh_interval', refreshInterval.toString());
-            } catch (e) {}
-
-            // Reset countdown to new interval
-            resetCountdown();
-        } else {
-            // Invalid input, reset to current value
+        let seconds = parseInt(input.value, 10);
+        if (isNaN(seconds) || seconds > 99) {
             input.value = refreshInterval / 1000;
+            return;
         }
+        if (seconds < 5) {
+            if (hint) {
+                hint.textContent = 'Min 5s. Recommend 10s.';
+                hint.className = 'dropdown-hint hint-warn';
+            }
+            seconds = 5;
+            input.value = 5;
+        } else {
+            if (hint) {
+                hint.textContent = '';
+                hint.className = 'dropdown-hint';
+            }
+        }
+        refreshInterval = seconds * 1000;
+        try { localStorage.setItem('mbcore_refresh_interval', refreshInterval.toString()); } catch (e) {}
+        resetCountdown();
     };
 
     input.addEventListener('blur', applyValue);
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            applyValue();
-            input.blur();
-        }
+        if (e.key === 'Enter') { e.preventDefault(); applyValue(); input.blur(); }
     });
 }
 
@@ -1781,6 +1892,12 @@ function updateCountdownDisplay() {
     const statCountdown = document.getElementById('stat-countdown');
     if (statCountdown) {
         statCountdown.textContent = `${countdown}s`;
+        // Turn red at 3 seconds or less
+        if (countdown <= 3) {
+            statCountdown.classList.add('countdown-urgent');
+        } else {
+            statCountdown.classList.remove('countdown-urgent');
+        }
     }
 }
 
@@ -1795,15 +1912,10 @@ function updateLocalTime() {
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
-    if (eventSource) {
-        eventSource.close();
-    }
-    if (refreshTimer) {
-        clearInterval(refreshTimer);
-    }
-    if (infoTimer) {
-        clearInterval(infoTimer);
-    }
+    if (eventSource) eventSource.close();
+    if (refreshTimer) clearInterval(refreshTimer);
+    if (priceTimer) clearInterval(priceTimer);
+    if (netSpeedTimer) clearInterval(netSpeedTimer);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1811,7 +1923,6 @@ window.addEventListener('beforeunload', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 let infoCurrency = 'USD';
-let infoTimer = null;
 let infoVisibility = {
     networks: true,
     chain: true,
@@ -1823,8 +1934,10 @@ let infoVisibility = {
 document.addEventListener('DOMContentLoaded', () => {
     loadNodeStatusPreferences();
     setupNodeStatusControls();
+    setupPriceRateControl();
     fetchInfoPanel();
-    startInfoPanelTimer();
+    startPriceTimer();
+    startNetSpeedPolling();
 });
 
 // Load node status panel preferences from localStorage
@@ -1939,13 +2052,7 @@ function applyCardVisibility() {
     });
 }
 
-// Start info panel update timer (uses the main refresh interval)
-function startInfoPanelTimer() {
-    // Info panel updates every 60 seconds by default
-    infoTimer = setInterval(() => {
-        fetchInfoPanel();
-    }, 60000);
-}
+// Info panel timer is now replaced by startPriceTimer (see bottom of file)
 
 // Fetch info panel data from API
 async function fetchInfoPanel() {
@@ -2010,19 +2117,19 @@ function formatBlockTime(timestamp) {
 
 // Update node status panel with data
 function updateInfoPanel(data) {
-    // BTC Price
+    // BTC Price - persistent coloring (stays green/red until next update)
     const priceEl = document.getElementById('info-btc-price');
     const currencyEl = document.getElementById('info-btc-currency');
     if (priceEl) {
         const formattedPrice = '$' + formatPrice(data.btc_price, data.btc_currency);
         priceEl.textContent = formattedPrice;
-        pulseOnChange('info-btc-price', data.btc_price);
+        pulseOnChange('info-btc-price', data.btc_price, 'persistent');
     }
     if (currencyEl) {
         currencyEl.textContent = data.btc_currency || 'USD';
     }
 
-    // Last Block
+    // Last Block - always increases, pulse green
     const blockEl = document.getElementById('info-last-block');
     if (blockEl && data.last_block) {
         const timeStr = formatBlockTime(data.last_block.time);
@@ -2062,7 +2169,10 @@ function updateInfoPanel(data) {
                 ? data.network_scores.ipv4.toLocaleString()
                 : '-';
             if (data.network_scores.ipv4 !== null) {
-                pulseOnChange('info-score-ipv4', data.network_scores.ipv4);
+                pulseOnChange('info-score-ipv4', data.network_scores.ipv4, 'long');
+                // Also pulse the "Score" label
+                const scoreLabelIpv4 = ipv4El.previousElementSibling;
+                if (scoreLabelIpv4) pulseOnChange('score-label-ipv4', data.network_scores.ipv4, 'long');
             }
         }
         if (ipv6El) {
@@ -2070,40 +2180,11 @@ function updateInfoPanel(data) {
                 ? data.network_scores.ipv6.toLocaleString()
                 : '-';
             if (data.network_scores.ipv6 !== null) {
-                pulseOnChange('info-score-ipv6', data.network_scores.ipv6);
+                pulseOnChange('info-score-ipv6', data.network_scores.ipv6, 'long');
+                const scoreLabelIpv6 = ipv6El.previousElementSibling;
+                if (scoreLabelIpv6) pulseOnChange('score-label-ipv6', data.network_scores.ipv6, 'long');
             }
         }
-    }
-
-    // System Stats with threshold coloring
-    const cpuEl = document.getElementById('info-cpu');
-    const memEl = document.getElementById('info-mem');
-    if (data.system_stats) {
-        if (cpuEl) {
-            const cpuVal = data.system_stats.cpu_pct;
-            cpuEl.textContent = cpuVal !== null ? cpuVal : '-';
-            // Threshold coloring: >90% red, >75% yellow
-            cpuEl.classList.remove('threshold-critical', 'threshold-warn');
-            if (cpuVal !== null) {
-                if (cpuVal >= 90) cpuEl.classList.add('threshold-critical');
-                else if (cpuVal >= 75) cpuEl.classList.add('threshold-warn');
-            }
-        }
-        if (memEl) {
-            const memVal = data.system_stats.mem_pct;
-            memEl.textContent = memVal !== null ? memVal : '-';
-            // Threshold coloring: >90% red, >80% yellow
-            memEl.classList.remove('threshold-critical', 'threshold-warn');
-            if (memVal !== null) {
-                if (memVal >= 90) memEl.classList.add('threshold-critical');
-                else if (memVal >= 80) memEl.classList.add('threshold-warn');
-            }
-        }
-    }
-
-    // Network traffic indicator
-    if (data.net_totals) {
-        updateNetTraffic(data.net_totals);
     }
 
     // Geo DB Status (inside System card)
@@ -3055,18 +3136,14 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NETWORK TRAFFIC INDICATOR WITH ADAPTIVE THRESHOLDS
+// NETWORK TRAFFIC INDICATOR (fast polling /api/netspeed via /proc/net/dev)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Previous sample for calculating deltas
-let prevNetTotals = null;
-
-// Rolling history for adaptive thresholds (keep last 30 samples)
-const NET_HISTORY_SIZE = 30;
+const NET_HISTORY_SIZE = 60;
 let netHistoryIn = [];
 let netHistoryOut = [];
+let netSpeedTimer = null;
 
-// Format bytes/sec to human readable rate
 function formatRate(bytesPerSec) {
     if (bytesPerSec < 0 || isNaN(bytesPerSec)) return '-';
     if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s';
@@ -3074,74 +3151,69 @@ function formatRate(bytesPerSec) {
     return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
 }
 
-// Get adaptive max from rolling history (use 90th percentile as "full bar")
 function getAdaptiveMax(history) {
-    if (history.length < 2) return 50 * 1024; // Default 50 KB/s until we have data
+    if (history.length < 3) return 50 * 1024;
     const sorted = [...history].sort((a, b) => a - b);
-    // Use 90th percentile, but always at least 10 KB/s to avoid tiny values filling the bar
     const p90Index = Math.floor(sorted.length * 0.9);
     const p90 = sorted[p90Index] || sorted[sorted.length - 1];
-    return Math.max(p90 * 1.2, 10 * 1024); // 20% headroom, min 10 KB/s
+    return Math.max(p90 * 1.2, 10 * 1024);
 }
 
-// Update network traffic bars
-function updateNetTraffic(netTotals) {
-    if (!netTotals) return;
-
+function updateNetTrafficBars(rxBps, txBps) {
     const barIn = document.getElementById('net-traffic-bar-in');
     const barOut = document.getElementById('net-traffic-bar-out');
     const rateIn = document.getElementById('net-traffic-rate-in');
     const rateOut = document.getElementById('net-traffic-rate-out');
     if (!barIn || !barOut || !rateIn || !rateOut) return;
 
-    if (prevNetTotals) {
-        const dtMs = netTotals.timemillis - prevNetTotals.timemillis;
-        if (dtMs > 0) {
-            const dtSec = dtMs / 1000;
-            const bytesInPerSec = (netTotals.totalbytesrecv - prevNetTotals.totalbytesrecv) / dtSec;
-            const bytesOutPerSec = (netTotals.totalbytessent - prevNetTotals.totalbytessent) / dtSec;
+    netHistoryIn.push(rxBps);
+    netHistoryOut.push(txBps);
+    if (netHistoryIn.length > NET_HISTORY_SIZE) netHistoryIn.shift();
+    if (netHistoryOut.length > NET_HISTORY_SIZE) netHistoryOut.shift();
 
-            // Add to rolling history
-            netHistoryIn.push(bytesInPerSec);
-            netHistoryOut.push(bytesOutPerSec);
-            if (netHistoryIn.length > NET_HISTORY_SIZE) netHistoryIn.shift();
-            if (netHistoryOut.length > NET_HISTORY_SIZE) netHistoryOut.shift();
+    const maxIn = getAdaptiveMax(netHistoryIn);
+    const maxOut = getAdaptiveMax(netHistoryOut);
 
-            // Get adaptive maximums
-            const maxIn = getAdaptiveMax(netHistoryIn);
-            const maxOut = getAdaptiveMax(netHistoryOut);
+    const pctIn = Math.min(100, (rxBps / maxIn) * 100);
+    const pctOut = Math.min(100, (txBps / maxOut) * 100);
 
-            // Calculate bar widths (0-100%)
-            const pctIn = Math.min(100, (bytesInPerSec / maxIn) * 100);
-            const pctOut = Math.min(100, (bytesOutPerSec / maxOut) * 100);
+    barIn.style.width = pctIn + '%';
+    barOut.style.width = pctOut + '%';
 
-            barIn.style.width = pctIn + '%';
-            barOut.style.width = pctOut + '%';
+    barIn.className = 'net-traffic-bar net-traffic-bar-in' +
+        (pctIn > 70 ? ' traffic-high' : pctIn > 30 ? ' traffic-med' : ' traffic-low');
+    barOut.className = 'net-traffic-bar net-traffic-bar-out' +
+        (pctOut > 70 ? ' traffic-high' : pctOut > 30 ? ' traffic-med' : ' traffic-low');
 
-            // Set traffic level classes
-            barIn.className = 'net-traffic-bar net-traffic-bar-in' +
-                (pctIn > 70 ? ' traffic-high' : pctIn > 30 ? ' traffic-med' : ' traffic-low');
-            barOut.className = 'net-traffic-bar net-traffic-bar-out' +
-                (pctOut > 70 ? ' traffic-high' : pctOut > 30 ? ' traffic-med' : ' traffic-low');
+    rateIn.textContent = formatRate(rxBps);
+    rateOut.textContent = formatRate(txBps);
+}
 
-            // Update rate text
-            rateIn.textContent = formatRate(bytesInPerSec);
-            rateOut.textContent = formatRate(bytesOutPerSec);
-        }
+async function pollNetSpeed() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/netspeed`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        updateNetTrafficBars(data.rx_bps || 0, data.tx_bps || 0);
+    } catch (e) {
+        // Silently ignore network errors
     }
+}
 
-    prevNetTotals = { ...netTotals };
+function startNetSpeedPolling() {
+    // Poll every 2 seconds for smooth, near-live updates
+    pollNetSpeed(); // First poll immediately
+    netSpeedTimer = setInterval(pollNetSpeed, 2000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VALUE CHANGE PULSE ANIMATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Store previous values for comparison
 const prevValues = {};
 
-// Apply a pulse animation to an element when its value changes
-function pulseOnChange(elementId, newValue, opts) {
+// mode: 'default' (1.5s green/red), 'long' (5s green/red), 'white' (1.5s white), 'persistent' (stay colored)
+function pulseOnChange(elementId, newValue, mode) {
     const el = document.getElementById(elementId);
     if (!el) return;
 
@@ -3154,22 +3226,111 @@ function pulseOnChange(elementId, newValue, opts) {
     const prev = prevValues[elementId];
     prevValues[elementId] = numNew;
 
-    if (prev === null || prev === undefined) return; // First load, no pulse
-    if (numNew === prev) return; // No change
+    if (prev === null || prev === undefined) return;
+    if (numNew === prev) return;
 
-    // Remove any existing animation
-    el.classList.remove('pulse-up', 'pulse-down');
-    // Force reflow to restart animation
+    const up = numNew > prev;
+    const allClasses = ['pulse-up', 'pulse-down', 'pulse-up-long', 'pulse-down-long', 'pulse-white', 'price-up', 'price-down'];
+    allClasses.forEach(c => el.classList.remove(c));
     void el.offsetWidth;
 
-    if (numNew > prev) {
-        el.classList.add('pulse-up');
+    if (mode === 'white') {
+        el.classList.add('pulse-white');
+        setTimeout(() => el.classList.remove('pulse-white'), 1500);
+    } else if (mode === 'long') {
+        el.classList.add(up ? 'pulse-up-long' : 'pulse-down-long');
+        setTimeout(() => el.classList.remove('pulse-up-long', 'pulse-down-long'), 5000);
+    } else if (mode === 'persistent') {
+        // Pulse first, then stay colored
+        el.classList.add(up ? 'pulse-up' : 'pulse-down');
+        setTimeout(() => {
+            el.classList.remove('pulse-up', 'pulse-down');
+            el.classList.add(up ? 'price-up' : 'price-down');
+        }, 1500);
     } else {
-        el.classList.add('pulse-down');
+        el.classList.add(up ? 'pulse-up' : 'pulse-down');
+        setTimeout(() => el.classList.remove('pulse-up', 'pulse-down'), 1500);
     }
+}
 
-    // Remove class after animation completes
-    setTimeout(() => {
-        el.classList.remove('pulse-up', 'pulse-down');
-    }, 1500);
+// ═══════════════════════════════════════════════════════════════════════════════
+// DELTA INDICATORS (+N / -N floating next to network counts)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const prevNetworkCounts = {};
+
+function showDeltaIndicator(parentEl, delta) {
+    if (!parentEl || delta === 0) return;
+    // Remove any existing delta indicator
+    const existing = parentEl.querySelector('.delta-indicator');
+    if (existing) existing.remove();
+
+    const span = document.createElement('span');
+    span.className = 'delta-indicator ' + (delta > 0 ? 'delta-up' : 'delta-down');
+    span.textContent = (delta > 0 ? '+' : '') + delta;
+    parentEl.appendChild(span);
+
+    // Remove after animation
+    setTimeout(() => span.remove(), 2500);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BITCOIN PRICE TIMER (independent from peer refresh)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let priceUpdateInterval = 10000; // 10 seconds default
+let priceTimer = null;
+
+function startPriceTimer() {
+    if (priceTimer) clearInterval(priceTimer);
+    priceTimer = setInterval(() => {
+        fetchInfoPanel();
+    }, priceUpdateInterval);
+}
+
+function setupPriceRateControl() {
+    try {
+        const saved = localStorage.getItem('mbcore_price_interval');
+        if (saved) {
+            const interval = parseInt(saved, 10);
+            if (interval >= 5000 && interval <= 99000) {
+                priceUpdateInterval = interval;
+            }
+        }
+    } catch (e) {}
+
+    const input = document.getElementById('price-rate-input');
+    if (!input) return;
+
+    input.value = priceUpdateInterval / 1000;
+    const hint = document.getElementById('price-rate-hint');
+
+    const applyValue = () => {
+        let seconds = parseInt(input.value, 10);
+        if (isNaN(seconds) || seconds > 99) {
+            input.value = priceUpdateInterval / 1000;
+            return;
+        }
+        if (seconds < 5) {
+            if (hint) {
+                hint.textContent = 'Min 5s. Recommend 10s.';
+                hint.className = 'dropdown-hint hint-warn';
+            }
+            seconds = 5;
+            input.value = 5;
+        } else {
+            if (hint) {
+                hint.textContent = '';
+                hint.className = 'dropdown-hint';
+            }
+        }
+        priceUpdateInterval = seconds * 1000;
+        try { localStorage.setItem('mbcore_price_interval', priceUpdateInterval.toString()); } catch (e) {}
+        startPriceTimer();
+    };
+
+    input.addEventListener('blur', applyValue);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); applyValue(); input.blur(); }
+    });
 }

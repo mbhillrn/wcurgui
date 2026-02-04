@@ -1037,6 +1037,57 @@ async def api_stats():
     with geo_pending_lock:
         pending = geo_pending_count
 
+    # System stats (CPU via /proc/stat, memory via /proc/meminfo) - very fast
+    system_stats = {'cpu_pct': None, 'mem_pct': None}
+    try:
+        # CPU usage via /proc/stat (instant read, compare with previous sample)
+        cpu_pct = None
+        try:
+            with open('/proc/stat', 'r') as f:
+                line = f.readline()  # First line is aggregate CPU
+                parts = line.split()
+                if len(parts) >= 8:
+                    # user, nice, system, idle, iowait, irq, softirq, steal
+                    idle = int(parts[4]) + int(parts[5])  # idle + iowait
+                    total = sum(int(x) for x in parts[1:8])
+                    if hasattr(api_stats, '_prev_cpu'):
+                        prev_idle, prev_total = api_stats._prev_cpu
+                        d_idle = idle - prev_idle
+                        d_total = total - prev_total
+                        if d_total > 0:
+                            cpu_pct = round(100 * (1 - d_idle / d_total), 0)
+                    api_stats._prev_cpu = (idle, total)
+        except:
+            pass
+
+        # Memory usage via /proc/meminfo (instant)
+        mem_pct = None
+        try:
+            with open('/proc/meminfo', 'r') as f:
+                mem_total = 0
+                mem_avail = 0
+                for line in f:
+                    if line.startswith('MemTotal:'):
+                        mem_total = int(line.split()[1])
+                    elif line.startswith('MemAvailable:'):
+                        mem_avail = int(line.split()[1])
+                if mem_total > 0:
+                    mem_pct = round((1 - mem_avail / mem_total) * 100, 1)
+        except:
+            pass
+
+        system_stats = {'cpu_pct': cpu_pct, 'mem_pct': mem_pct}
+    except:
+        pass
+
+    # Geo DB entry count (cheap SQLite count)
+    geo_entry_count = 0
+    try:
+        stats = get_geo_db_stats()
+        geo_entry_count = stats.get('entries', 0)
+    except:
+        pass
+
     return {
         'connected': peer_count,
         'networks': network_counts,
@@ -1044,21 +1095,61 @@ async def api_stats():
         'geo_pending': pending,
         'last_update': datetime.now().strftime('%H:%M:%S'),
         'refresh_interval': REFRESH_INTERVAL,
+        'system_stats': system_stats,
+        'geo_entry_count': geo_entry_count,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NETWORK SPEED ENDPOINT (fast polling, reads /proc/net/dev)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_prev_net_sample = None
+
+@app.get("/api/netspeed")
+async def api_netspeed():
+    """Get current network throughput by reading /proc/net/dev (instant, zero cost)"""
+    global _prev_net_sample
+    try:
+        now = time.time()
+        rx_total = 0
+        tx_total = 0
+        with open('/proc/net/dev', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if ':' not in line or line.startswith('Inter') or line.startswith('face'):
+                    continue
+                iface, data = line.split(':', 1)
+                iface = iface.strip()
+                if iface == 'lo':
+                    continue  # Skip loopback
+                parts = data.split()
+                if len(parts) >= 9:
+                    rx_total += int(parts[0])  # bytes received
+                    tx_total += int(parts[8])  # bytes transmitted
+
+        result = {'rx_bps': 0, 'tx_bps': 0, 'ts': now}
+        if _prev_net_sample:
+            dt = now - _prev_net_sample['ts']
+            if dt > 0:
+                result['rx_bps'] = max(0, (rx_total - _prev_net_sample['rx']) / dt)
+                result['tx_bps'] = max(0, (tx_total - _prev_net_sample['tx']) / dt)
+        _prev_net_sample = {'rx': rx_total, 'tx': tx_total, 'ts': now}
+        return result
+    except Exception as e:
+        return {'rx_bps': 0, 'tx_bps': 0, 'error': str(e)}
 
 
 @app.get("/api/info")
 async def api_info(currency: str = "USD"):
-    """Get dashboard info panel data: BTC price, block info, blockchain stats, network scores, system stats"""
+    """Get dashboard info panel data: BTC price, block info, blockchain stats, network scores, geo DB stats"""
     result = {
         'btc_price': None,
         'btc_currency': currency,
         'last_block': None,
         'blockchain': None,
         'network_scores': None,
-        'system_stats': None,
         'geo_db_stats': None,
-        'net_totals': None
     }
 
     # 1. Bitcoin price from Coinbase API
@@ -1152,61 +1243,7 @@ async def api_info(currency: str = "USD"):
     except Exception as e:
         print(f"Network scores fetch error: {e}")
 
-    # 5. System stats (CPU and memory)
-    try:
-        # CPU usage via vmstat
-        cpu_pct = None
-        try:
-            r = subprocess.run(['vmstat', '1', '2'], capture_output=True, text=True, timeout=5)
-            if r.returncode == 0:
-                lines = r.stdout.strip().split('\n')
-                if len(lines) >= 3:
-                    # Use the second measurement (line 3)
-                    parts = lines[-1].split()
-                    if len(parts) >= 15:
-                        idle = int(parts[14])
-                        cpu_pct = 100 - idle
-        except:
-            pass
-
-        # Memory usage via /proc/meminfo
-        mem_pct = None
-        try:
-            with open('/proc/meminfo', 'r') as f:
-                mem_total = 0
-                mem_avail = 0
-                for line in f:
-                    if line.startswith('MemTotal:'):
-                        mem_total = int(line.split()[1])
-                    elif line.startswith('MemAvailable:'):
-                        mem_avail = int(line.split()[1])
-                if mem_total > 0:
-                    mem_pct = round((1 - mem_avail / mem_total) * 100, 1)
-        except:
-            pass
-
-        result['system_stats'] = {
-            'cpu_pct': cpu_pct,
-            'mem_pct': mem_pct
-        }
-    except Exception as e:
-        print(f"System stats fetch error: {e}")
-
-    # 6. Network totals from getnettotals (bytes sent/received)
-    try:
-        cmd = config.get_cli_command() + ['getnettotals']
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if r.returncode == 0:
-            nettotals = json.loads(r.stdout)
-            result['net_totals'] = {
-                'totalbytesrecv': nettotals.get('totalbytesrecv', 0),
-                'totalbytessent': nettotals.get('totalbytessent', 0),
-                'timemillis': nettotals.get('timemillis', 0)
-            }
-    except Exception as e:
-        print(f"Net totals fetch error: {e}")
-
-    # 7. Geo database stats (always returned so frontend can show status)
+    # 5. Geo database stats (always returned so frontend can show status)
     try:
         stats = get_geo_db_stats()
         if stats.get('entries', 0) > 0:
