@@ -686,6 +686,15 @@ function getStableAntarcticaPosition(peerAddr, network, locationType) {
 }
 
 // Network colors (matching CSS)
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : { r: 255, g: 255, b: 255 };
+}
+
 const NETWORK_COLORS = {
     'ipv4':  '#d29922', // yellow
     'ipv6':  '#e69500', // orange
@@ -771,36 +780,56 @@ function updateMap() {
         marker.addTo(map);
         markers[peer.id] = marker;
 
-        // Animate new markers: smooth shrink → hold green → fade to network color
+        // Animate new markers: smooth shrink → smooth color fade to network color
         if (isNew) {
             // Phase 1: Shrink from 9 to resting size over ~800ms (stepped for smooth feel)
-            const steps = 8;
+            const shrinkSteps = 8;
             const startRadius = 9;
             const endRadius = 5;
-            const stepDelay = 100; // 800ms total
-            for (let i = 1; i <= steps; i++) {
+            const shrinkDelay = 100; // 800ms total
+            for (let i = 1; i <= shrinkSteps; i++) {
                 ((step) => {
                     setTimeout(() => {
                         if (!markers[peer.id]) return;
-                        const t = step / steps;
-                        // Ease-out curve
+                        const t = step / shrinkSteps;
                         const eased = 1 - Math.pow(1 - t, 2);
                         const r = startRadius + (endRadius - startRadius) * eased;
                         marker.setRadius(r);
-                        // Gradually reduce glow
                         marker.setStyle({
                             fillOpacity: 0.95 - (eased * 0.25),
                             weight: 1.5 - (eased * 0.5)
                         });
-                    }, step * stepDelay);
+                    }, step * shrinkDelay);
                 })(i);
             }
 
-            // Phase 2: Hold green at resting size for 2.5s (starts after shrink finishes)
-            // Phase 3: Transition to network color after hold period
+            // Phase 2: Smoothly interpolate color from green to network color over 2.5s
+            const fadeStart = 800; // after shrink finishes
+            const fadeDuration = 2500;
+            const fadeSteps = 25; // 25 steps over 2.5s = every 100ms
+            const fadeStepDelay = fadeDuration / fadeSteps;
+            const startColor = { r: 0x56, g: 0xd3, b: 0x64 }; // #56d364
+            const endColor = hexToRgb(color);
+
+            for (let i = 1; i <= fadeSteps; i++) {
+                ((step) => {
+                    setTimeout(() => {
+                        if (!markers[peer.id]) return;
+                        const t = step / fadeSteps;
+                        // Ease-in curve so it lingers on green then accelerates to target
+                        const eased = t * t;
+                        const r = Math.round(startColor.r + (endColor.r - startColor.r) * eased);
+                        const g = Math.round(startColor.g + (endColor.g - startColor.g) * eased);
+                        const b = Math.round(startColor.b + (endColor.b - startColor.b) * eased);
+                        const blended = `rgb(${r},${g},${b})`;
+                        marker.setStyle({ fillColor: blended });
+                    }, fadeStart + step * fadeStepDelay);
+                })(i);
+            }
+
+            // Final settle: ensure exact network color and resting style
             setTimeout(() => {
                 if (!markers[peer.id]) return;
-                // Smooth color transition via intermediate step
                 marker.setStyle({
                     fillColor: color,
                     color: '#ffffff',
@@ -808,7 +837,7 @@ function updateMap() {
                     fillOpacity: 0.7,
                     opacity: 0.8
                 });
-            }, 800 + 2500); // shrink time + hold time
+            }, fadeStart + fadeDuration + 50);
         }
     });
 }
