@@ -93,16 +93,16 @@ html, body {
 }
 
 .logo-m {
-    color: #7ec8e3;
+    color: #4a90d9;
 }
 
 .logo-btc {
-    color: #4a90d9;
+    color: #7ec8e3;
     font-weight: 700;
 }
 
 .logo-core {
-    color: #7ec8e3;
+    color: #4a90d9;
 }
 
 .logo-light {
@@ -539,9 +539,10 @@ html, body {
 
 .map-container {
     flex: 1;
-    min-height: 500px;
-    height: calc(100vh - 280px);
+    min-height: 420px;
+    height: calc(100vh - 320px);
     background: var(--bg-primary);
+    width: 100%;
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -1106,12 +1107,19 @@ html, body {
 .bytes-sent { color: var(--accent); }
 .bytes-recv { color: var(--green); }
 
-/* Network text colors for table cells */
-.network-ipv4 { color: var(--net-ipv4); }
-.network-ipv6 { color: var(--net-ipv6); }
-.network-onion { color: var(--net-onion); }
-.network-i2p { color: var(--net-i2p); }
-.network-cjdns { color: var(--net-cjdns); }
+/* Network text colors for table cells - needs specificity to override .peer-table td */
+.peer-table td.network-ipv4, .network-ipv4 { color: var(--net-ipv4); }
+.peer-table td.network-ipv6, .network-ipv6 { color: var(--net-ipv6); }
+.peer-table td.network-onion, .network-onion { color: var(--net-onion); }
+.peer-table td.network-i2p, .network-i2p { color: var(--net-i2p); }
+.peer-table td.network-cjdns, .network-cjdns { color: var(--net-cjdns); }
+.peer-table td.bytes-sent { color: var(--accent); }
+.peer-table td.bytes-recv { color: var(--green); }
+.peer-table td.addrman-yes { color: var(--green); font-weight: 600; }
+.peer-table td.addrman-no { color: var(--red); }
+
+/* Hidden columns */
+.col-hidden { display: none !important; }
 
 .loading-row td {
     text-align: center;
@@ -1627,7 +1635,8 @@ html, body {
     font-family: var(--font-data);
     font-size: 10px;
     font-weight: 600;
-    position: absolute;
+    display: inline-block;
+    margin-left: 2px;
     pointer-events: none;
     animation: delta-float 2.5s ease-out forwards;
 }

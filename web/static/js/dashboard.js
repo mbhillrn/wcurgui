@@ -111,6 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
     columnWidths = {};
     hasSavedColumnWidths = false;
     autoSizedColumns = false;
+    // Apply defaults immediately to hide non-default columns in the HTML
+    applyColumnVisibility();
+    reorderTableColumns();
     setupRefreshRateControl(); // Load refresh rate preference early
     setupChangesWindowControl(); // Load changes window preference
     setupAntarcticaToggle(); // Setup Antarctica show/hide toggle
@@ -718,8 +721,8 @@ function initMap() {
         noWrap: true
     }).addTo(map);
 
-    // Fit to show full world vertically (Russia to Antarctica)
-    map.fitBounds([[-70, -180], [80, 180]], { padding: [10, 10] });
+    // Fit to show the whole world: top of Russia to top of Antarctica, full horizontal
+    map.fitBounds([[-65, -180], [75, 180]], { padding: [5, 20] });
 
     // Fix map size when container resizes
     const mapContainer = document.getElementById('map-panel');
@@ -901,17 +904,37 @@ function updateMap() {
         });
 
         const networkLabel = network.toUpperCase();
-        const statusLabel = peer.location_status === 'private' ? ' (Private)' :
-                           peer.location_status === 'unavailable' ? ' (Unavailable)' : '';
+        const isPrivate = peer.location_status === 'private' || peer.location_status === 'unavailable';
 
-        marker.bindPopup(`
-            <strong>${peer.ip}</strong><br>
-            <span style="color: ${color}">${networkLabel}</span>${statusLabel}<br>
-            ${peer.location_status === 'ok' ? `${peer.city}, ${peer.countryCode}` : peer.location}<br>
-            ${peer.isp || '-'}<br>
-            <span style="color: ${peer.direction === 'IN' ? '#3fb950' : '#58a6ff'}">${peer.direction}</span>
-            | ${peer.subver}
-        `);
+        let popupHtml;
+        if (isPrivate) {
+            popupHtml = `
+                <strong>ID ${peer.id}</strong> — <span style="font-family:var(--font-data)">${peer.ip}:${peer.port || '-'}</span><br>
+                <span style="color: ${color}; font-weight:600">${networkLabel}</span><br>
+                <span style="color: var(--text-dim); font-style:italic">(Location Private)</span><br>
+                <span style="font-size:10px; color: var(--text-dim)">Shown in Antarctica for display only.<br>Toggle in map legend above.</span><br>
+                <span style="color: ${peer.direction === 'IN' ? '#3fb950' : '#58a6ff'}">${peer.connection_type_abbrev || peer.direction}</span>
+                | ${peer.conntime_fmt || '-'}
+            `;
+        } else {
+            const locParts = [];
+            if (peer.city) locParts.push(peer.city);
+            if (peer.regionName || peer.region) locParts.push(peer.regionName || peer.region);
+            if (peer.country) locParts.push(peer.country);
+            if (peer.continent) locParts.push(peer.continent);
+            const locStr = locParts.length > 0 ? locParts.join(', ') : (peer.location || '-');
+
+            popupHtml = `
+                <strong>ID ${peer.id}</strong> — <span style="font-family:var(--font-data)">${peer.ip}:${peer.port || '-'}</span><br>
+                <span style="color: ${color}; font-weight:600">${networkLabel}</span><br>
+                ${locStr}<br>
+                ${peer.isp || '-'}<br>
+                <span style="color: ${peer.direction === 'IN' ? '#3fb950' : '#58a6ff'}">${peer.connection_type_abbrev || peer.direction}</span>
+                | ${peer.conntime_fmt || '-'}
+            `;
+        }
+
+        marker.bindPopup(popupHtml);
 
         marker.addTo(map);
         markers[peer.id] = marker;
@@ -1042,9 +1065,21 @@ function setupColumnConfig() {
                     if (!visibleColumns.includes(col)) {
                         visibleColumns.push(col);
                     }
-                    // Also add to columnOrder if not present (for newly enabled columns)
                     if (!columnOrder.includes(col)) {
                         columnOrder.push(col);
+                    }
+                    // Ensure <th> exists for this column (dynamic geo columns may not be in HTML)
+                    const existingTh = document.querySelector(`#peer-table th[data-col="${col}"]`);
+                    if (!existingTh) {
+                        const thead = document.querySelector('#peer-table thead tr');
+                        if (thead) {
+                            const th = document.createElement('th');
+                            th.dataset.sort = col;
+                            th.dataset.col = col;
+                            th.title = columnLabels[col] || col;
+                            th.textContent = columnLabels[col] || col;
+                            thead.appendChild(th);
+                        }
                     }
                 } else {
                     visibleColumns = visibleColumns.filter(c => c !== col);
@@ -1658,9 +1693,17 @@ function renderChanges(changes) {
                     const peer = currentPeers.find(p => p.ip === ip);
                     if (peer && peer.lat && peer.lon) {
                         map.flyTo([peer.lat, peer.lon], 6, { duration: 1.0 });
-                        // Open popup if marker exists
                         const marker = markers[peer.id];
                         if (marker) marker.openPopup();
+                    } else {
+                        // Location not yet resolved - show brief tooltip
+                        const origText = item.textContent;
+                        item.textContent = origText + ' (still locating...)';
+                        item.style.color = 'var(--yellow)';
+                        setTimeout(() => {
+                            item.textContent = origText;
+                            item.style.color = '';
+                        }, 2000);
                     }
                 });
             });
@@ -2416,9 +2459,10 @@ function updateInfoPanel(data) {
     if (data.subversion) {
         if (sidebarSubver) {
             sidebarSubver.textContent = data.subversion;
+            sidebarSubver.title = data.subversion;
         }
         if (sidebarNodeHeader) {
-            sidebarNodeHeader.title = `Node: ${data.subversion}`;
+            sidebarNodeHeader.title = data.subversion;
         }
     }
 
