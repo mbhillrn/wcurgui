@@ -74,15 +74,17 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 
 ### Dashboard Layout
 - **Two-Column Layout** - Sidebar with node info, system stats, price, and recent updates alongside the main map
-- **M₿Core Branding** - Color-coded header with light blue M/Core and darker blue ₿ symbol
+- **M₿Core Branding** - Color-coded header with darker blue M/Core and lighter blue ₿ symbol
 - **Unified Settings** - Single settings dropdown for refresh rates, visibility toggles, and panel configuration
 
 ### Map
 - **Interactive World Map** - Leaflet.js dark map (CartoDB Dark Matter) with full vertical coverage from Russia to Antarctica
-- **Finite World** - No wrapping; single clean world view with bounded panning
-- **Network-Colored Markers** - Each peer dot is colored by its network type (IPv4 yellow, IPv6 orange, Tor red, I2P purple, CJDNS pink)
-- **Antarctica Clustering** - Private network peers (Tor, I2P, CJDNS) are placed at stable positions along the Antarctic coast
+- **Map Display Modes** - Normal (finite), Wrap + Points (world wraps with ghost markers), Wrap Only (world wraps), and Stretched (horizontal stretch to see more)
+- **Fit All Button** - One-click zoom to show all connected peers; auto-fits on page load and when changing map modes
+- **Network-Colored Markers** - Each peer dot is colored by its network type (IPv4 yellow, IPv6 red, Tor blue, I2P purple, CJDNS pink)
+- **Antarctica Clustering** - Private network peers (Tor, I2P, CJDNS) are placed at stable positions along the northern Antarctic coastline
 - **Region Selector** - Quick-jump to World, North America, South America, Europe, Africa, Middle East, Asia, Oceania, or Antarctica
+- **Hide/Show Antarctica** - Toggle private network dots in the map legend
 - **New Peer Animations** - Green pulse that fades to network color when a new peer connects
 
 ### Peer Table
@@ -96,7 +98,8 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 - **Drag-and-Drop Reorder** - Rearrange columns by dragging headers
 - **Resizable Columns** - Drag column edges to resize
 - **3-State Sorting** - Click headers to cycle: unsorted → ascending → descending
-- **Network Filters** - Filter by all, IPv4, IPv6, Tor, I2P, or CJDNS with bold active state
+- **Network Filters** - Filter by all, IPv4, IPv6, Tor, I2P, or CJDNS; active filter stays bold in its network color
+- **Configurable Row Limit** - Show 5 to 50 visible rows (default 15) via the column config menu
 - **Click to Map** - Click any peer row to fly to its location on the map
 
 ### Node Info Sidebar
@@ -608,7 +611,7 @@ Hover over any badge to see its full description.
 
 | Column | Color Scheme |
 |--------|-------------|
-| **Network text** | All columns use network-specific colors (IPv4 yellow, IPv6 orange, Tor red, I2P purple, CJDNS pink) |
+| **Network text** | All columns use network-specific colors (IPv4 yellow, IPv6 red, Tor blue, I2P purple, CJDNS pink) |
 | **Bytes Sent** | Blue |
 | **Bytes Received** | Green |
 | **In Addrman?** | Green for Yes, Red for No |
