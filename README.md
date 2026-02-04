@@ -1,4 +1,4 @@
-# M₿Core Dashboard - Live Bitcoin Core Peer Map
+# M₿Core Dashboard - Live Bitcoin Core Peer Map (Geolocation)
 
 A lightweight real-time monitoring dashboard for Bitcoin Core nodes that visualizes peer connections on an interactive world map.
 
