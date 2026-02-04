@@ -1049,7 +1049,7 @@ async def api_stats():
                 if len(parts) >= 8:
                     # user, nice, system, idle, iowait, irq, softirq, steal
                     idle = int(parts[4]) + int(parts[5])  # idle + iowait
-                    total = sum(int(x) for x in parts[1:8])
+                    total = sum(int(x) for x in parts[1:])  # sum all CPU fields including steal
                     if hasattr(api_stats, '_prev_cpu'):
                         prev_idle, prev_total = api_stats._prev_cpu
                         d_idle = idle - prev_idle

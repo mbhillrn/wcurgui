@@ -48,8 +48,6 @@
                         Mempool
                     </button>
                     <span class="status-time">
-                        <span class="time-item"><span class="countdown-label">Next Peer<br>Update:</span> <span id="stat-countdown">10s</span></span>
-                        <span class="time-sep">|</span>
                         <span class="time-item" id="stat-localtime">--:--:--</span>
                     </span>
                     <button class="panel-config-btn" id="node-config-btn" title="Configure panel">
@@ -244,8 +242,11 @@
             <div class="panel-header">
                 <h2>Peer Map</h2>
                 <span class="map-status" id="map-status">
+                    <span class="map-countdown-label">Update in:</span>
+                    <span class="map-countdown" id="stat-countdown">10s</span>
+                    <span class="map-status-sep">|</span>
                     <span class="status-dot status-ok" id="map-status-dot"></span>
-                    <span id="map-status-text">Updated!</span>
+                    <span id="map-status-text">Map Loaded!</span>
                 </span>
                 <span class="map-legend">
                     <span class="legend-group" title="Public networks with geo location">

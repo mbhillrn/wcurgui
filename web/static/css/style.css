@@ -228,14 +228,6 @@ body {
     color: var(--text-dim);
 }
 
-.time-item #stat-countdown {
-    color: var(--accent-yellow);
-    font-weight: 600;
-    display: inline-block;
-    min-width: 2.2em;
-    text-align: right;
-}
-
 .time-sep {
     color: var(--border-color);
 }
@@ -606,6 +598,21 @@ body {
     100% { color: inherit; text-shadow: none; }
 }
 
+/* BTC price pulse: lighter shade fading smoothly into the resting color */
+@keyframes price-pulse-green {
+    0%   { color: #7ee787; text-shadow: 0 0 10px rgba(126, 231, 135, 0.7); }
+    25%  { color: #56d364; text-shadow: 0 0 6px rgba(86, 211, 100, 0.5); }
+    55%  { color: #4ac35a; text-shadow: 0 0 3px rgba(63, 185, 80, 0.3); }
+    100% { color: #3fb950; text-shadow: none; }
+}
+
+@keyframes price-pulse-red {
+    0%   { color: #ffb4b0; text-shadow: 0 0 10px rgba(255, 180, 176, 0.7); }
+    25%  { color: #ff7b72; text-shadow: 0 0 6px rgba(255, 123, 114, 0.5); }
+    55%  { color: #f96b61; text-shadow: 0 0 3px rgba(248, 81, 73, 0.3); }
+    100% { color: #f85149; text-shadow: none; }
+}
+
 .pulse-up {
     animation: pulse-green 1.5s ease-out;
 }
@@ -626,13 +633,21 @@ body {
     animation: pulse-red-long 5s ease-out;
 }
 
-/* BTC price persistent coloring */
+/* BTC price persistent coloring - starts with pulse animation, ends on resting color */
 .price-up {
     color: var(--accent-green) !important;
 }
 
 .price-down {
     color: var(--accent-red) !important;
+}
+
+.price-pulse-up {
+    animation: price-pulse-green 2s ease-out forwards;
+}
+
+.price-pulse-down {
+    animation: price-pulse-red 2s ease-out forwards;
 }
 
 /* CPU/Memory threshold colors */
@@ -652,17 +667,6 @@ body {
     line-height: 1;
 }
 
-/* Countdown label styling */
-.countdown-label {
-    font-size: 10px;
-    color: var(--text-dim);
-    line-height: 1.2;
-}
-
-/* Countdown turns red at 3s or less */
-.time-item #stat-countdown.countdown-urgent {
-    color: var(--accent-red);
-}
 
 /* Dropdown hint text */
 .dropdown-hint {
@@ -678,13 +682,15 @@ body {
 
 /* Delta indicator (+N / -N floating next to network counts) */
 .delta-indicator {
-    display: inline-block;
+    position: absolute;
+    top: -2px;
+    right: -4px;
     font-size: 10px;
     font-weight: 600;
-    margin-left: 3px;
     opacity: 1;
     animation: delta-fade 2.5s ease-out forwards;
-    vertical-align: middle;
+    pointer-events: none;
+    white-space: nowrap;
 }
 
 .delta-indicator.delta-up {
@@ -702,8 +708,8 @@ body {
 
 /* Map marker animations */
 @keyframes marker-appear {
-    0% { transform: scale(2); opacity: 0.3; }
-    50% { transform: scale(1.3); opacity: 0.8; }
+    0% { transform: scale(1.5); opacity: 0.5; }
+    60% { transform: scale(1.05); opacity: 0.9; }
     100% { transform: scale(1); opacity: 1; }
 }
 
@@ -1039,6 +1045,7 @@ body {
     padding: 2px 6px;
     border-radius: 3px;
     transition: all 0.2s;
+    position: relative;
 }
 
 .network-filter-btn:hover {
@@ -1456,6 +1463,27 @@ th[data-col="direction"] {
     background: var(--bg-tertiary);
     border-radius: 4px;
     margin-left: 12px;
+}
+
+.map-countdown-label {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.map-countdown {
+    color: var(--accent-yellow);
+    font-weight: 600;
+    display: inline-block;
+    min-width: 2.5em;
+    text-align: right;
+}
+
+.map-countdown.countdown-urgent {
+    color: var(--accent-red);
+}
+
+.map-status-sep {
+    color: var(--border-color);
 }
 
 .status-dot {
