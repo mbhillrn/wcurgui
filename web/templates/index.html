@@ -137,6 +137,12 @@
                             <span id="map-status-text">Map Loaded!</span>
                         </span>
                         <div class="map-region-selector">
+                            <select id="map-display-mode" title="Map display mode">
+                                <option value="normal">Normal</option>
+                                <option value="stretched">Stretched</option>
+                                <option value="wrap-points">Wrap + Points</option>
+                                <option value="wrap-only">Wrap Only</option>
+                            </select>
                             <select id="map-region-select" title="Select map region">
                                 <option value="world">World</option>
                                 <option value="north-america">North America</option>
@@ -449,6 +455,21 @@
                 </div>
                 <div class="modal-body" id="column-checkboxes"></div>
                 <div class="modal-footer">
+                    <div class="modal-footer-row">
+                        <span class="modal-footer-label">Visible rows:</span>
+                        <select id="peer-row-limit" title="Number of peer rows to show before scrolling">
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                            <option value="15" selected>15</option>
+                            <option value="20">20</option>
+                            <option value="25">25</option>
+                            <option value="30">30</option>
+                            <option value="35">35</option>
+                            <option value="40">40</option>
+                            <option value="45">45</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
                     <button class="restore-defaults-btn" id="restore-defaults-btn" title="Restore default columns and order">Restore Column Defaults</button>
                 </div>
             </div>

@@ -18,8 +18,8 @@
     --yellow: #d29922;
     --orange: #f0883e;
     --net-ipv4: #e3b341;
-    --net-ipv6: #f0883e;
-    --net-onion: #f07178;
+    --net-ipv6: #f07178;
+    --net-onion: #4a9eff;
     --net-i2p: #6830e6;
     --net-cjdns: #d2a8ff;
     --sidebar-width: 280px;
@@ -991,7 +991,7 @@ html, body {
 .table-container {
     overflow: auto;
     flex: 1;
-    max-height: 650px;
+    /* max-height set dynamically by JS based on peer-row-limit setting */
 }
 
 .peer-table {
@@ -1343,6 +1343,26 @@ html, body {
     padding: 10px 16px;
     border-top: 1px solid var(--border-primary);
     text-align: center;
+}
+.modal-footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.modal-footer-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.modal-footer-row select {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: var(--font-data);
+    font-size: 11px;
+    padding: 2px 6px;
 }
 
 .modal-body label {

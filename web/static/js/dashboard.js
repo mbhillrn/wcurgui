@@ -130,8 +130,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupRestoreDefaults();
     setupPanelResize();
     setupPeerRowClick();
+    setupPeerRowLimit();
     initMap();
     setupMapRegionSelector();
+    setupMapDisplayMode();
     setupCurrencyDropdown();
     setupToggleChangesPanel();
     setupRestoreAllDefaults();
@@ -695,43 +697,111 @@ function setupPanelResize() {
     });
 }
 
-// Initialize Leaflet map
-function initMap() {
-    // Bounds: top of Russia (~75N) down to top of Antarctica (~65S)
+// Peer row limit (how many visible before scroll)
+let peerRowLimit = 15;
+const PEER_ROW_HEIGHT = 27; // approximate px per row
+
+function setupPeerRowLimit() {
+    const select = document.getElementById('peer-row-limit');
+    if (!select) return;
+
+    select.addEventListener('change', () => {
+        peerRowLimit = parseInt(select.value, 10) || 15;
+        applyPeerRowLimit();
+    });
+
+    // Apply on init
+    applyPeerRowLimit();
+}
+
+function applyPeerRowLimit() {
+    const container = document.querySelector('.table-container');
+    if (container) {
+        // header row (~30px) + data rows
+        container.style.maxHeight = (30 + peerRowLimit * PEER_ROW_HEIGHT) + 'px';
+    }
+}
+
+// Current map display mode: 'normal', 'stretched', 'wrap-points', 'wrap-only'
+let mapDisplayMode = 'normal';
+
+// Initialize Leaflet map (or re-create for mode change)
+function initMap(mode) {
+    mode = mode || mapDisplayMode;
+    mapDisplayMode = mode;
+
+    // Destroy existing map if present
+    const mapEl = document.getElementById('map');
+    if (map) {
+        map.remove();
+        map = null;
+    }
+
+    // Clear markers reference (they were on the old map)
+    Object.keys(markers).forEach(k => delete markers[k]);
+
+    const isWrap = (mode === 'wrap-points' || mode === 'wrap-only');
+
     const worldBounds = L.latLngBounds(
-        L.latLng(-85, -180),  // Southwest corner
-        L.latLng(85, 180)     // Northeast corner
+        L.latLng(-85, -180),
+        L.latLng(85, 180)
     );
 
-    map = L.map('map', {
+    const mapOpts = {
         center: [20, 0],
         zoom: 2,
         minZoom: 2,
         maxZoom: 18,
-        worldCopyJump: false,
-        maxBounds: worldBounds,
-        maxBoundsViscosity: 1.0
-    });
+        worldCopyJump: isWrap
+    };
+
+    // Only constrain bounds for non-wrapping modes
+    if (!isWrap) {
+        mapOpts.maxBounds = worldBounds;
+        mapOpts.maxBoundsViscosity = 1.0;
+    }
+
+    map = L.map('map', mapOpts);
 
     // Dark tile layer (CartoDB Dark Matter)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 19,
-        noWrap: true
+        noWrap: !isWrap
     }).addTo(map);
 
-    // Fit to show the whole world: top of Russia to top of Antarctica, full horizontal
-    map.fitBounds([[-65, -180], [75, 180]], { padding: [5, 20] });
+    // Initial view depends on mode
+    if (mode === 'stretched') {
+        map.fitBounds([[-65, -180], [75, 180]], { padding: [0, 0] });
+    } else {
+        map.fitBounds([[-65, -180], [75, 180]], { padding: [5, 20] });
+    }
 
     // Fix map size when container resizes
     const mapContainer = document.getElementById('map-panel');
     if (mapContainer) {
         const resizeObserver = new ResizeObserver(() => {
-            map.invalidateSize();
+            if (map) map.invalidateSize();
         });
         resizeObserver.observe(mapContainer);
     }
+
+    // Re-add all current peer markers
+    if (currentPeers.length > 0) {
+        updateMap();
+    }
+}
+
+// Setup map display mode selector
+function setupMapDisplayMode() {
+    const select = document.getElementById('map-display-mode');
+    if (!select) return;
+
+    select.addEventListener('change', () => {
+        const mode = select.value;
+        initMap(mode);
+    });
 }
 
 // Map region presets
@@ -835,11 +905,11 @@ function hexToRgb(hex) {
 }
 
 const NETWORK_COLORS = {
-    'ipv4':  '#d29922', // yellow
-    'ipv6':  '#e69500', // orange
-    'onion': '#c74e4e', // mild red
+    'ipv4':  '#e3b341', // yellow
+    'ipv6':  '#f07178', // red (swapped with onion)
+    'onion': '#4a9eff', // blue (swapped with ipv6)
     'i2p':   '#6830e6', // deep purple
-    'cjdns': '#d296c7', // light pink
+    'cjdns': '#d2a8ff', // light pink
     'unavailable': '#6e7681' // gray
 };
 
@@ -856,7 +926,6 @@ function updateMap() {
             if (el) {
                 el.style.transition = 'opacity 2s ease';
                 el.style.opacity = '0';
-                // Flash red before fading
                 m.setStyle({ fillColor: '#f85149', color: '#f85149', fillOpacity: 1 });
                 setTimeout(() => {
                     map.removeLayer(m);
@@ -865,6 +934,12 @@ function updateMap() {
             } else {
                 map.removeLayer(m);
                 delete markers[id];
+            }
+            // Remove ghost markers if any
+            const ghostKey = id + '_ghosts';
+            if (markers[ghostKey]) {
+                markers[ghostKey].forEach(g => map.removeLayer(g));
+                delete markers[ghostKey];
             }
         }
     });
@@ -938,6 +1013,24 @@ function updateMap() {
 
         marker.addTo(map);
         markers[peer.id] = marker;
+
+        // Wrap + Points mode: add ghost markers at lon±360 so dots show on wrapped copies
+        if (mapDisplayMode === 'wrap-points') {
+            const ghostOpts = {
+                radius: 5, fillColor: color, color: '#ffffff',
+                weight: 1, opacity: 0.6, fillOpacity: 0.5
+            };
+            const ghost1 = L.circleMarker([lat, lon - 360], ghostOpts);
+            const ghost2 = L.circleMarker([lat, lon + 360], ghostOpts);
+            ghost1.bindPopup(popupHtml);
+            ghost2.bindPopup(popupHtml);
+            ghost1.addTo(map);
+            ghost2.addTo(map);
+            // Store ghost markers for cleanup
+            if (!markers[peer.id + '_ghosts']) {
+                markers[peer.id + '_ghosts'] = [ghost1, ghost2];
+            }
+        }
 
         // Animate new markers: smooth shrink → smooth color fade to network color
         if (isNew) {
