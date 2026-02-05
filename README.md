@@ -5,19 +5,19 @@ A lightweight real-time monitoring dashboard for Bitcoin Core nodes that visuali
 ![MBCore Dashboard](docs/images/1.Full.Front.Dash.png)
 
 - Interactive world map of YOUR node's actual connected peers
+- No accounts, no external services requiring signup, runs locally!
+- Real-time with automatic (and optoinal) updates of software and maintained geolocation database
 - Zero config - just point at bitcoind
 - Dashboard supports all 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS) with color-coded network indicators
 - Geolocation supported on public internet protocols (Ipv4, Ipv6)
 - Connect, disconnect, and ban peers directly from the dashboard
 - Mempool info with real-time stats
 - Live Bitcoin price with persistent price move indication
-- No accounts, no external services requiring signup, runs locally
 - Lightweight single script install
-- Real-time with SSE updates
 - Two-column layout with sidebar, finite world map, and unified settings
 - Scrollable peer list with color-coded connection types and network text
-- Clickable recent updates to fly to peer locations on the map
-- GeoIP database with one-click update from GitHub
+- Click peer to zoom directly to location on the map!
+- GeoIP database with one-click server update directly from Github repo (now without even leaving the map!)
 
 **Requires:** Bitcoin Core (`bitcoind`) installed and running on your system.
 
@@ -71,7 +71,7 @@ If you're running a less common setup and run into issues, please [open an issue
 
 ## Why?
 
-Running a Bitcoin node is more enjoyable when you can see your peers across the globe. Traditional monitoring solutions like Grafana require complex setup and configuration. MBCore Dashboard provides instant visualization with zero configuration beyond pointing it at your node.
+Running a Bitcoin node is more enjoyable when you can see your peers across the globe. Traditional monitoring solutions require complex setup and configuration. MBCore Dashboard provides instant visualization with zero configuration beyond pointing it at your node.
 
 ## Features
 
