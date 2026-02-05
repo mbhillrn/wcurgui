@@ -83,7 +83,7 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 - **Interactive World Map** - Leaflet.js dark map (CartoDB Dark Matter) with full vertical coverage from Russia to Antarctica
 - **Map Display Modes** - Normal (finite), Wrap + Points (world wraps with ghost markers), Wrap Only (world wraps), and Stretched (horizontal stretch to see more)
 - **Fit All Button** - One-click zoom to show all connected peers; auto-fits on page load and when changing map modes
-- **Network-Colored Markers** - Each peer dot is colored by its network type (IPv4 yellow, IPv6 red, Tor blue, I2P purple, CJDNS pink)
+- **Network-Colored Markers** - Each peer dot is colored by its network type (IPv4 yellow, IPv6 red, Tor blue, I2P purple, CJDNS light purple)
 - **Antarctica Clustering** - Private network peers (Tor, I2P, CJDNS) are placed at stable positions along the northern Antarctic coastline
 - **Region Selector** - Quick-jump to World, North America, South America, Europe, Africa, Middle East, Asia, Oceania, or Antarctica
 - **Hide/Show Antarctica** - Toggle private network dots in the map legend
@@ -604,7 +604,7 @@ Hover over any badge to see its full description.
 
 | Column | Color Scheme |
 |--------|-------------|
-| **Network text** | All columns use network-specific colors (IPv4 yellow, IPv6 red, Tor blue, I2P purple, CJDNS pink) |
+| **Network text** | All columns use network-specific colors (IPv4 yellow, IPv6 red, Tor blue, I2P purple, CJDNS light purple) |
 | **Bytes Sent** | Blue |
 | **Bytes Received** | Green |
 | **In Addrman?** | Green for Yes, Red for No |
