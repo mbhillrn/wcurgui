@@ -36,7 +36,6 @@ cd Bitcoin-Core-Peer-Map
 - [Why?](#why)
 - [Features](#features)
 - [Quick Start](#quick-start)
-- [First Run](#first-run)
 - [How To Access The Dashboard](#how-to-access-the-dashboard)
 - [Firewall Configuration](#firewall-configuration)
 - [Dependencies](#dependencies)
@@ -152,70 +151,71 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 
 ## Quick Start
 
+**Clone and run** - the script handles everything else:
+
 ```bash
-# Clone the repository
 git clone https://github.com/mbhillrn/Bitcoin-Core-Peer-Map.git
 cd Bitcoin-Core-Peer-Map
-
-# Run the dashboard
 ./da.sh
 ```
 
-The script will:
-1. Check for required dependencies (and offer to install missing ones)
-2. Auto-detect your Bitcoin Core installation
-3. Create a Python virtual environment
-4. Launch the web dashboard on port 58333
-
-**For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md).**
+That's it. On first run you'll be walked through setup - just press `y` at each prompt. Here's what to expect:
 
 ---
 
-## First Run
-
-On first run, the script automatically handles everything. Just answer `y` to the prompts and you're done.
-
 ### Step 1: Prerequisites & Virtual Environment
 
-The script checks for required system tools and sets up an isolated Python environment:
+The script checks for required tools and sets up a Python environment. Press `y` to install:
 
 ![Prerequisites and venv setup](docs/images/2.venv-prompt.png)
 
-Press `y` to install. If you're on Ubuntu/Debian and see a message about `python3-venv`, just press `y` again and enter your password - the script handles it.
-
-### Step 2: Package Installation
-
-Once approved, packages install automatically:
+Packages install automatically:
 
 ![Package installation](docs/images/3.install-success.png)
 
-### Step 3: Bitcoin Core Detection
+### Step 2: Bitcoin Core Detection
 
-The script auto-detects your Bitcoin Core setup - this works for most common configurations and many uncommon ones too (custom paths, systemd services, non-standard datadirs):
+Your Bitcoin Core setup is auto-detected. Press `y` to accept:
 
 ![Bitcoin Core detection](docs/images/4.detection.png)
 
-Press `y` to accept the detected settings. If detection fails or finds the wrong paths, press `n` to enter them manually:
+If detection fails or finds the wrong paths, press `n` to enter them manually:
 
 ![Manual configuration](docs/images/4a.manual.bitcoin.conf.entry.png)
 
-### Step 4: Geo/IP Database Setup
+### Step 3: Geo/IP Database Setup
 
-On first run, you'll choose how to handle peer geolocation data:
+Choose how to handle peer geolocation data (Option 1 recommended):
 
 ![GeoIP Database Setup](docs/images/4c.GeoIP.First.Run.png)
 
 - **Option 1: Enable and keep updated** (Recommended) - Downloads a shared database of known Bitcoin node locations for instant lookups. Auto-updates on each start.
 - **Option 2: Enable, self-managed** - Only caches peers you discover yourself. No external database.
-- **Option 3: Don't use a database** - Relies on live API lookups only (still very usable with this method, although limited to one call per 1-2 seconds).
+- **Option 3: Don't use a database** - Relies on live API lookups only (still usable, but limited to one call per 1-2 seconds).
 
 If you choose Option 1, the database downloads in seconds:
 
 ![GeoIP Database Download](docs/images/4d.GeoIP.dbdl.png)
 
+### Step 4: Launch the Dashboard
+
+You'll land at the main menu. Press `1` to start the dashboard:
+
+![Main Menu](docs/images/5.main-menu.png)
+
+The dashboard launches and shows you your access URLs:
+
+![Dashboard Launch](docs/images/10.dashboard-launch.png)
+
+Open the URL in your browser and you're in:
+
+![MBCore Dashboard](docs/images/1.Full.Front.Dash.png)
+
+**For access scenarios (headless, SSH tunnel, firewall), see [How To Access The Dashboard](#how-to-access-the-dashboard) below or the detailed [QUICKSTART.md](QUICKSTART.md).**
+
 ### Recovering from Incomplete Installation
 
-If a previous installation was interrupted (such as power loss), the script detects this and offers to reset:
+If a previous installation was interrupted (power loss, etc.), the script detects this and offers to reset:
 
 ```
 MBCore Dashboard virtual environment needs to be reset
@@ -228,8 +228,6 @@ Your other Python environments are not affected.
 
 ? Reset the MBCore Dashboard virtual environment? [y/N] y
 ```
-
-After setup completes, you'll see the main menu.
 
 ---
 
