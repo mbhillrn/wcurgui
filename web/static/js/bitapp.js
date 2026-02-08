@@ -25,7 +25,7 @@
         fadeInDuration: 800,       // ms for new node spawn animation
         fadeOutDuration: 1500,     // ms for disconnected node fade-out
         minZoom: 0.5,
-        maxZoom: 8,
+        maxZoom: 18,
         zoomStep: 1.15,
         panSmooth: 0.12,           // smoothing factor for view interpolation
         gridSpacing: 30,           // degrees between grid lines
@@ -589,24 +589,29 @@
         }
     }
 
-    /** Draw country borders at all zoom levels — always visible */
+    /** Draw country borders at all zoom levels — always visible, zoom-aware strokes */
     function drawCountryBorders() {
         if (!bordersReady) return;
-        // Constant subtle alpha at all zoom levels; slightly brighter when zoomed in
-        const alpha = 0.12 + clamp((view.zoom - 1) / 4, 0, 1) * 0.08;
+        // Visible alpha at all zoom levels; brighter when zoomed in
+        const alpha = 0.25 + clamp((view.zoom - 1) / 3, 0, 1) * 0.15;
+        // Stroke width scales with zoom so borders never become sub-pixel
+        const strokeW = Math.max(1.0, 0.8 * view.zoom);
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            drawLineSet(borderLines, `rgba(88,166,255,${alpha})`, 0.5, off);
+            drawLineSet(borderLines, `rgba(88,166,255,${alpha})`, strokeW, off);
         }
     }
 
-    /** Draw state/province borders at all wrap positions (zoom >= ZOOM_SHOW_STATES) */
+    /** Draw state/province borders (zoom >= ZOOM_SHOW_STATES), zoom-aware strokes */
     function drawStateBorders() {
         if (!statesReady || view.zoom < ZOOM_SHOW_STATES) return;
-        const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 0.8, 0, 1) * 0.08;
+        // Fade in from threshold, cap at solid visibility
+        const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 1.5, 0, 1) * 0.20;
+        // Stroke width scales with zoom, minimum 1 screen pixel
+        const strokeW = Math.max(1.0, 0.5 * view.zoom);
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            drawLineSet(stateLines, `rgba(88,166,255,${alpha})`, 0.3, off);
+            drawLineSet(stateLines, `rgba(88,166,255,${alpha})`, strokeW, off);
         }
     }
 
@@ -892,7 +897,7 @@
         drawLakes();
         // 4. Country borders (always visible at all zoom levels)
         drawCountryBorders();
-        // 5. State/province borders (zoom >= 3.0, fades in)
+        // 5. State/province borders (zoom >= 3.0, zoom-aware stroke width)
         drawStateBorders();
         // 6. City labels (zoom >= 3.5, high zoom only with borders as context)
         drawCities();
