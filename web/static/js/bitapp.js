@@ -115,12 +115,12 @@
     let citiesReady = false;
 
     // Zoom thresholds for progressive detail layers
-    const ZOOM_SHOW_BORDERS = 1.5;   // country borders appear at this zoom
+    // Country borders render at ALL zoom levels (no threshold)
     const ZOOM_SHOW_STATES  = 3.0;   // state/province borders appear
-    const ZOOM_SHOW_CITIES_MAJOR = 2.0;  // cities > 5M population
-    const ZOOM_SHOW_CITIES_LARGE = 3.0;  // cities > 1M population
-    const ZOOM_SHOW_CITIES_MED   = 4.5;  // cities > 300K population
-    const ZOOM_SHOW_CITIES_ALL   = 6.0;  // all cities
+    const ZOOM_SHOW_CITIES_MAJOR = 3.5;  // cities > 5M population (only with borders as context)
+    const ZOOM_SHOW_CITIES_LARGE = 4.5;  // cities > 1M population
+    const ZOOM_SHOW_CITIES_MED   = 5.5;  // cities > 300K population
+    const ZOOM_SHOW_CITIES_ALL   = 7.0;  // all cities
 
     // DOM references
     const clockEl = document.getElementById('clock');
@@ -484,32 +484,16 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // DRAWING — Grid, landmasses, lakes, nodes, connections
-    // All geometry is drawn at 3 horizontal offsets (-360, 0, +360)
-    // to create seamless world wrap when panning left/right.
+    // DRAWING — Grid, landmasses, lakes, borders, cities, nodes
+    // World is locked to a single copy (no horizontal wrap).
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Compute which world-wrap copies are needed for the current view.
-     * Returns an array of longitude offsets (e.g. [-360, 0, 360]) where
-     * at least part of that copy would be visible on screen.
+     * Returns longitude offsets for world rendering.
+     * Currently locked to a single copy (no horizontal wrap).
      */
     function getWrapOffsets() {
-        // Figure out which longitude range is currently visible
-        const left = screenToWorld(0, H / 2);
-        const right = screenToWorld(W, H / 2);
-        const offsets = [];
-        // Check -360, 0, +360 — any copy whose lon range overlaps the screen
-        for (const off of [-360, 0, 360]) {
-            const copyLeft = -180 + off;
-            const copyRight = 180 + off;
-            if (copyRight >= left.lon && copyLeft <= right.lon) {
-                offsets.push(off);
-            }
-        }
-        // Always include at least the centre copy
-        if (offsets.length === 0) offsets.push(0);
-        return offsets;
+        return [0];
     }
 
     /** Draw subtle lat/lon grid lines (with wrap) */
@@ -605,11 +589,11 @@
         }
     }
 
-    /** Draw country borders at all wrap positions (zoom >= ZOOM_SHOW_BORDERS) */
+    /** Draw country borders at all zoom levels — always visible */
     function drawCountryBorders() {
-        if (!bordersReady || view.zoom < ZOOM_SHOW_BORDERS) return;
-        // Fade in gradually: 0 at threshold, full at threshold + 0.5
-        const alpha = clamp((view.zoom - ZOOM_SHOW_BORDERS) / 0.5, 0, 1) * 0.15;
+        if (!bordersReady) return;
+        // Constant subtle alpha at all zoom levels; slightly brighter when zoomed in
+        const alpha = 0.12 + clamp((view.zoom - 1) / 4, 0, 1) * 0.08;
         const offsets = getWrapOffsets();
         for (const off of offsets) {
             drawLineSet(borderLines, `rgba(88,166,255,${alpha})`, 0.5, off);
@@ -628,11 +612,11 @@
 
     /**
      * Draw city labels at all wrap positions.
-     * Population threshold determines which cities appear at each zoom:
-     *   zoom 2.0+  → mega-cities (>5M)
-     *   zoom 3.0+  → large cities (>1M)
-     *   zoom 4.5+  → medium cities (>300K)
-     *   zoom 6.0+  → all cities
+     * Cities only appear at high zoom where borders provide context:
+     *   zoom 3.5+  → mega-cities (>5M)
+     *   zoom 4.5+  → large cities (>1M)
+     *   zoom 5.5+  → medium cities (>300K)
+     *   zoom 7.0+  → all cities
      */
     function drawCities() {
         if (!citiesReady || view.zoom < ZOOM_SHOW_CITIES_MAJOR) return;
@@ -906,11 +890,11 @@
         drawLandmasses();
         // 3. Lakes carved out on top of land (always visible)
         drawLakes();
-        // 4. Country borders (zoom >= 1.5, fades in)
+        // 4. Country borders (always visible at all zoom levels)
         drawCountryBorders();
         // 5. State/province borders (zoom >= 3.0, fades in)
         drawStateBorders();
-        // 6. City labels (zoom >= 2.0, population-filtered)
+        // 6. City labels (zoom >= 3.5, high zoom only with borders as context)
         drawCities();
         // 7. Connection mesh lines between nearby peers
         drawConnectionLines(now, wrapOffsets);
