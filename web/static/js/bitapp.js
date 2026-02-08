@@ -191,16 +191,18 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // WORLD MAP GEOMETRY — Real Natural Earth 110m landmasses
-    // Loaded from /static/assets/world-110m.json on startup.
+    // WORLD MAP GEOMETRY — Real Natural Earth 50m landmasses
+    // Loaded from /static/assets/world-50m.json on startup.
     // Format: array of polygons, each polygon is an array of
     // rings (outer + holes), each ring is [[lon,lat], ...].
     // Source: Natural Earth (public domain), stripped to coords only.
+    // 50m gives much better coastline detail than 110m (~1410 polygons
+    // vs 127), while still being fast to load and render on canvas.
     // ═══════════════════════════════════════════════════════════
 
     async function loadWorldGeometry() {
         try {
-            const resp = await fetch('/static/assets/world-110m.json');
+            const resp = await fetch('/static/assets/world-50m.json');
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const polygons = await resp.json();
 
