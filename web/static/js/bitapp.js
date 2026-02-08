@@ -1,64 +1,120 @@
 /* ============================================================
-   MBCore vNext — Canvas World Map with Animated Nodes
-   Phase 1: Fake data, visual proof-of-concept
+   MBCore vNext — Canvas World Map with Real Bitcoin Peers
+   Phase 2.1: Real peer data from /api/peers, no fake nodes
+   ============================================================
+   - Fetches real peers from the existing MBCoreServer backend
+   - Renders them on a canvas world map (no Leaflet)
+   - Private/overlay networks (Tor, I2P, CJDNS) placed in Antarctica
+   - Polls every 10s with fade-in for new peers, fade-out for gone peers
+   - Pan, zoom, hover tooltips all preserved from Phase 1
    ============================================================ */
 
 (function () {
     'use strict';
 
-    // ── Configuration ──────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // CONFIGURATION
+    // ═══════════════════════════════════════════════════════════
+
     const CFG = {
-        nodeCount: 80,
-        nodeRadius: 3,
-        glowRadius: 14,
-        pulseSpeed: 0.0018,        // radians per ms
-        trailLength: 0.6,          // seconds of connection trail fade
+        pollInterval: 10000,       // ms between /api/peers fetches
+        infoPollInterval: 15000,   // ms between /api/info fetches
+        nodeRadius: 3,             // base circle radius in px
+        glowRadius: 14,            // outer glow radius in px
+        pulseSpeed: 0.0018,        // glow pulse speed (radians per ms)
+        fadeInDuration: 800,       // ms for new node spawn animation
+        fadeOutDuration: 1500,     // ms for disconnected node fade-out
         minZoom: 0.5,
         maxZoom: 8,
         zoomStep: 1.15,
-        panSmooth: 0.12,
-        gridSpacing: 30,           // degrees
+        panSmooth: 0.12,           // smoothing factor for view interpolation
+        gridSpacing: 30,           // degrees between grid lines
         coastlineWidth: 1.0,
-        fps: 60,
     };
 
-    // Network colours (match CSS)
+    // ═══════════════════════════════════════════════════════════
+    // NETWORK COLOURS (match bitstyle.css --net-* variables)
+    // ═══════════════════════════════════════════════════════════
+
     const NET_COLORS = {
-        ipv4:  { r: 227, g: 179, b: 65  },
-        ipv6:  { r: 240, g: 113, b: 120 },
-        tor:   { r: 74,  g: 158, b: 255 },
-        i2p:   { r: 139, g: 92,  b: 246 },
-        cjdns: { r: 210, g: 168, b: 255 },
+        ipv4:  { r: 227, g: 179, b: 65  },   // gold
+        ipv6:  { r: 240, g: 113, b: 120 },   // coral
+        onion: { r: 74,  g: 158, b: 255 },   // sky blue (Tor)
+        i2p:   { r: 139, g: 92,  b: 246 },   // purple
+        cjdns: { r: 210, g: 168, b: 255 },   // lavender
     };
-    const NET_NAMES = Object.keys(NET_COLORS);
+    // Fallback colour for unknown network types
+    const NET_COLOR_UNKNOWN = { r: 120, g: 130, b: 140 };
 
-    // ── State ──────────────────────────────────────────────────
+    // Map internal network names to display-friendly labels
+    const NET_DISPLAY = {
+        ipv4: 'IPv4', ipv6: 'IPv6', onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS',
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // ANTARCTICA RESEARCH STATIONS
+    // Private/overlay peers get placed here (same stations as v5)
+    // ═══════════════════════════════════════════════════════════
+
+    const ANTARCTICA_STATIONS = [
+        { lat: -67.6020, lon: 62.8730  },  // Mawson Station
+        { lat: -68.5760, lon: 77.9670  },  // Davis Station
+        { lat: -66.2810, lon: 110.5280 },  // Casey Station
+        { lat: -66.6630, lon: 140.0010 },  // Dumont d'Urville
+        { lat: -69.0050, lon: 39.5800  },  // Syowa Station
+        { lat: -70.6670, lon: 11.6330  },  // Novolazarevskaya
+        { lat: -70.7500, lon: -8.2500  },  // Neumayer Station
+        { lat: -70.4500, lon: -2.8420  },  // SANAE IV Station
+    ];
+
+    // Cache so each peer always lands on the same Antarctica spot
+    const antarcticaCache = {};
+
+    // ═══════════════════════════════════════════════════════════
+    // CANVAS & VIEW STATE
+    // ═══════════════════════════════════════════════════════════
+
     const canvas = document.getElementById('worldmap');
     const ctx = canvas.getContext('2d');
-    let W, H;
+    let W, H;  // canvas logical dimensions (CSS pixels)
 
-    // View transform (world coords: x = lon -180..180, y = lat -90..90)
+    // Current view (smoothly interpolated each frame)
     let view = { x: 0, y: 0, zoom: 1 };
+    // Target view (set instantly by user input, view lerps toward it)
     let targetView = { x: 0, y: 0, zoom: 1 };
 
-    // Interaction state
+    // Mouse drag state
     let dragging = false;
     let dragStart = { x: 0, y: 0 };
     let dragViewStart = { x: 0, y: 0 };
 
-    // Fake nodes
-    let nodes = [];
+    // ═══════════════════════════════════════════════════════════
+    // NODE STATE
+    // Nodes are built from /api/peers responses.
+    // Each node has animation metadata (spawnTime, fadeOutStart).
+    // ═══════════════════════════════════════════════════════════
 
-    // World geometry (simplified continent outlines - GeoJSON-like lon/lat arrays)
+    let nodes = [];          // currently visible + fading-out nodes
+    let knownPeerIds = {};   // id -> true, tracks which peers we've seen
+
+    // ═══════════════════════════════════════════════════════════
+    // WORLD GEOMETRY (simplified continent outlines)
+    // Low-res hand-traced polygons for visual effect only.
+    // ═══════════════════════════════════════════════════════════
+
     let worldPolygons = [];
     let worldReady = false;
 
-    // Clock
+    // DOM references
     const clockEl = document.getElementById('clock');
+    const tooltipEl = document.getElementById('node-tooltip');
+    let hoveredNode = null;
 
-    // ── Helpers ─────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════════════════════════
 
-    /** Mercator-like projection: lon/lat -> normalised 0..1 */
+    /** Mercator projection: lon/lat -> normalised 0..1 coordinates */
     function project(lon, lat) {
         const x = (lon + 180) / 360;
         const latRad = lat * Math.PI / 180;
@@ -67,7 +123,7 @@
         return { x, y };
     }
 
-    /** World coords (lon/lat) -> screen pixels */
+    /** Convert lon/lat to screen pixel coordinates using current view */
     function worldToScreen(lon, lat) {
         const p = project(lon, lat);
         const sx = (p.x - 0.5) * W * view.zoom + W / 2 - view.x * view.zoom;
@@ -75,7 +131,7 @@
         return { x: sx, y: sy };
     }
 
-    /** Screen pixels -> world coords (lon/lat) */
+    /** Convert screen pixel coordinates back to lon/lat */
     function screenToWorld(sx, sy) {
         const px = ((sx - W / 2 + view.x * view.zoom) / (W * view.zoom)) + 0.5;
         const py = ((sy - H / 2 + view.y * view.zoom) / (H * view.zoom)) + 0.5;
@@ -97,13 +153,47 @@
         return Math.max(min, Math.min(max, v));
     }
 
-    function randomInRange(min, max) {
-        return Math.random() * (max - min) + min;
+    /** Simple deterministic hash for stable Antarctica placement */
+    function hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash = hash & hash;  // force 32-bit integer
+        }
+        return hash;
     }
 
-    // ── World Map Data ─────────────────────────────────────────
-    // Simplified continent outlines (lon, lat pairs).
-    // This is a low-res hand-traced approximation for visual effect.
+    // ═══════════════════════════════════════════════════════════
+    // ANTARCTICA PLACEMENT
+    // Peers with location_status "private" or "unavailable" (or
+    // overlay networks like Tor/I2P/CJDNS) are placed near
+    // Antarctic research stations with a deterministic offset
+    // so they don't jump around between refreshes.
+    // ═══════════════════════════════════════════════════════════
+
+    function getAntarcticaPosition(addr) {
+        if (antarcticaCache[addr]) return antarcticaCache[addr];
+
+        const h1 = hashString(addr);
+        const h2 = hashString(addr + '_offset');
+
+        // Pick a station deterministically
+        const idx = Math.abs(h1) % ANTARCTICA_STATIONS.length;
+        const station = ANTARCTICA_STATIONS[idx];
+
+        // Small offset (±0.5 deg) so peers near same station don't stack
+        const latOff = ((Math.abs(h2) % 100) / 100 - 0.5) * 1.0;
+        const lonOff = ((Math.abs(h2 >> 8) % 100) / 100 - 0.5) * 1.0;
+
+        const pos = { lat: station.lat + latOff, lon: station.lon + lonOff };
+        antarcticaCache[addr] = pos;
+        return pos;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // WORLD MAP POLYGONS (continent outlines)
+    // Same simplified polygons as Phase 1.
+    // ═══════════════════════════════════════════════════════════
 
     function buildWorldPolygons() {
         worldPolygons = [
@@ -119,17 +209,17 @@
             [[-15,12],[-17,15],[-12,25],[-5,35],[0,36],[10,37],[12,32],[20,32],[25,30],[32,32],[35,30],[42,12],[50,2],[42,-5],[40,-12],[35,-22],[30,-30],[22,-34],[18,-34],[15,-28],[12,-18],[8,-5],[5,5],[0,6],[-8,5],[-15,12]],
             // Asia
             [[28,36],[35,40],[42,48],[50,50],[55,55],[60,60],[65,68],[75,72],[90,72],[100,68],[115,65],[125,60],[130,55],[140,55],[145,50],[142,44],[135,38],[128,34],[122,30],[115,24],[108,18],[105,12],[100,5],[98,8],[95,15],[88,22],[80,28],[72,32],[60,38],[50,40],[42,45],[35,40],[28,36]],
-            // India subcontinent
+            // India
             [[68,24],[72,22],[78,16],[80,8],[82,12],[88,22],[90,26],[85,28],[80,30],[75,28],[68,24]],
-            // Southeast Asian islands (rough)
+            // Southeast Asian islands
             [[100,2],[105,0],[108,-2],[112,-5],[115,-8],[120,-8],[125,-5],[128,-2],[130,0],[128,2],[122,5],[118,3],[112,2],[108,3],[105,2],[100,2]],
             // Australia
             [[115,-15],[120,-14],[130,-12],[135,-14],[140,-16],[148,-20],[152,-25],[153,-28],[150,-33],[145,-38],[137,-35],[130,-32],[122,-33],[116,-32],[114,-28],[114,-22],[118,-20],[120,-18],[115,-15]],
-            // New Zealand (simplified)
+            // New Zealand
             [[166,-35],[172,-34],[178,-37],[177,-42],[174,-46],[170,-45],[168,-42],[166,-35]],
             // UK / Ireland
             [[-8,51],[-5,52],[-3,54],[-5,56],[-3,58],[0,58],[2,54],[2,52],[0,50],[-4,50],[-8,51]],
-            // Japan (simplified)
+            // Japan
             [[130,31],[132,34],[136,36],[140,38],[142,42],[144,44],[142,44],[140,42],[138,38],[136,36],[134,34],[130,31]],
             // Greenland
             [[-55,60],[-48,62],[-42,65],[-35,70],[-25,74],[-20,76],[-22,80],[-30,82],[-42,82],[-50,78],[-55,74],[-58,68],[-55,60]],
@@ -141,79 +231,163 @@
         worldReady = true;
     }
 
-    // ── Fake Node Generation ───────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // DATA FETCHING — Real peers from /api/peers
+    // ═══════════════════════════════════════════════════════════
 
-    function generateFakeNodes(count) {
-        const cities = [
-            // Major cities with lat/lon
-            { lat: 40.71, lon: -74.01, city: 'New York', country: 'US' },
-            { lat: 51.51, lon: -0.13, city: 'London', country: 'UK' },
-            { lat: 35.68, lon: 139.69, city: 'Tokyo', country: 'JP' },
-            { lat: 48.86, lon: 2.35, city: 'Paris', country: 'FR' },
-            { lat: -33.87, lon: 151.21, city: 'Sydney', country: 'AU' },
-            { lat: 55.76, lon: 37.62, city: 'Moscow', country: 'RU' },
-            { lat: -23.55, lon: -46.63, city: 'Sao Paulo', country: 'BR' },
-            { lat: 37.77, lon: -122.42, city: 'San Francisco', country: 'US' },
-            { lat: 52.52, lon: 13.41, city: 'Berlin', country: 'DE' },
-            { lat: 1.35, lon: 103.82, city: 'Singapore', country: 'SG' },
-            { lat: 43.65, lon: -79.38, city: 'Toronto', country: 'CA' },
-            { lat: 19.43, lon: -99.13, city: 'Mexico City', country: 'MX' },
-            { lat: 28.61, lon: 77.23, city: 'New Delhi', country: 'IN' },
-            { lat: 39.91, lon: 116.39, city: 'Beijing', country: 'CN' },
-            { lat: -34.60, lon: -58.38, city: 'Buenos Aires', country: 'AR' },
-            { lat: 59.33, lon: 18.07, city: 'Stockholm', country: 'SE' },
-            { lat: 50.45, lon: 30.52, city: 'Kyiv', country: 'UA' },
-            { lat: 25.20, lon: 55.27, city: 'Dubai', country: 'AE' },
-            { lat: 22.28, lon: 114.16, city: 'Hong Kong', country: 'HK' },
-            { lat: 47.37, lon: 8.54, city: 'Zurich', country: 'CH' },
-            { lat: 41.90, lon: 12.50, city: 'Rome', country: 'IT' },
-            { lat: 34.05, lon: -118.24, city: 'Los Angeles', country: 'US' },
-            { lat: 45.42, lon: -75.69, city: 'Ottawa', country: 'CA' },
-            { lat: 35.69, lon: 51.39, city: 'Tehran', country: 'IR' },
-            { lat: -1.29, lon: 36.82, city: 'Nairobi', country: 'KE' },
-            { lat: 33.87, lon: 35.51, city: 'Beirut', country: 'LB' },
-            { lat: -37.81, lon: 144.96, city: 'Melbourne', country: 'AU' },
-            { lat: 60.17, lon: 24.94, city: 'Helsinki', country: 'FI' },
-            { lat: 40.42, lon: -3.70, city: 'Madrid', country: 'ES' },
-            { lat: 30.04, lon: 31.24, city: 'Cairo', country: 'EG' },
-            { lat: 37.57, lon: 126.98, city: 'Seoul', country: 'KR' },
-            { lat: 13.76, lon: 100.50, city: 'Bangkok', country: 'TH' },
-            { lat: 52.37, lon: 4.90, city: 'Amsterdam', country: 'NL' },
-            { lat: 38.72, lon: -9.14, city: 'Lisbon', country: 'PT' },
-            { lat: 53.35, lon: -6.26, city: 'Dublin', country: 'IE' },
-            { lat: 64.13, lon: -21.90, city: 'Reykjavik', country: 'IS' },
-            { lat: -22.91, lon: -43.17, city: 'Rio de Janeiro', country: 'BR' },
-            { lat: 49.28, lon: -123.12, city: 'Vancouver', country: 'CA' },
-            { lat: 41.01, lon: 28.98, city: 'Istanbul', country: 'TR' },
-            { lat: 14.60, lon: 120.98, city: 'Manila', country: 'PH' },
-        ];
+    /**
+     * Fetch peers from the backend and transform them into canvas nodes.
+     * - Peers with valid lat/lon and location_status "ok" use real coords
+     * - Private/unavailable/pending peers go to Antarctica
+     * - Existing nodes that are no longer in the response start fading out
+     * - New nodes fade in with a spawn animation
+     */
+    async function fetchPeers() {
+        try {
+            const resp = await fetch('/api/peers');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const peers = await resp.json();
 
-        const result = [];
-        for (let i = 0; i < count; i++) {
-            // Pick a city and jitter the position
-            const base = cities[i % cities.length];
-            const lat = base.lat + randomInRange(-3, 3);
-            const lon = base.lon + randomInRange(-3, 3);
-            const net = NET_NAMES[Math.floor(Math.random() * NET_NAMES.length)];
-            result.push({
-                id: i,
-                lat,
-                lon,
-                net,
-                city: base.city,
-                country: base.country,
-                color: NET_COLORS[net],
-                // animation state
-                phase: Math.random() * Math.PI * 2,
-                spawnTime: Date.now() + Math.random() * 3000,  // stagger spawn
-                alive: true,
-                ping: Math.floor(randomInRange(8, 320)),
+            const now = Date.now();
+
+            // Build a set of peer IDs from this response
+            const currentIds = new Set();
+            for (const p of peers) currentIds.add(p.id);
+
+            // ── Mark departed peers for fade-out ──
+            // If a node was alive and is no longer in the response, start its fade-out
+            for (const node of nodes) {
+                if (node.alive && !currentIds.has(node.peerId)) {
+                    node.alive = false;
+                    node.fadeOutStart = now;
+                }
+            }
+
+            // ── Add or update existing peers ──
+            for (const peer of peers) {
+                const existing = nodes.find(n => n.peerId === peer.id && n.alive);
+
+                // Determine map coordinates
+                let lat, lon;
+                const isPrivate = (
+                    peer.location_status === 'private' ||
+                    peer.location_status === 'unavailable' ||
+                    peer.location_status === 'pending'
+                );
+
+                if (isPrivate || (peer.lat === 0 && peer.lon === 0)) {
+                    // Place in Antarctica with stable position
+                    const pos = getAntarcticaPosition(peer.addr || `peer-${peer.id}`);
+                    lat = pos.lat;
+                    lon = pos.lon;
+                } else {
+                    lat = peer.lat;
+                    lon = peer.lon;
+                }
+
+                // Resolve network colour
+                const netKey = peer.network || 'ipv4';
+                const color = NET_COLORS[netKey] || NET_COLOR_UNKNOWN;
+
+                if (existing) {
+                    // ── Update in place (peer still connected) ──
+                    // Update data that might change (ping, bytes, etc)
+                    existing.lat = lat;
+                    existing.lon = lon;
+                    existing.ping = peer.ping_ms || 0;
+                    existing.city = peer.city || '';
+                    existing.country = peer.country || peer.countryCode || '';
+                    existing.subver = peer.subver || '';
+                    existing.direction = peer.direction || '';
+                    existing.conntime_fmt = peer.conntime_fmt || '';
+                    existing.isp = peer.isp || '';
+                    existing.isPrivate = isPrivate;
+                    existing.location_status = peer.location_status;
+                } else {
+                    // ── New peer — create node with spawn animation ──
+                    nodes.push({
+                        peerId: peer.id,
+                        lat,
+                        lon,
+                        net: netKey,
+                        color,
+                        city: peer.city || '',
+                        country: peer.country || peer.countryCode || '',
+                        subver: peer.subver || '',
+                        direction: peer.direction || '',
+                        ping: peer.ping_ms || 0,
+                        conntime_fmt: peer.conntime_fmt || '',
+                        isp: peer.isp || '',
+                        isPrivate,
+                        location_status: peer.location_status,
+                        addr: peer.addr || '',
+                        // Animation state
+                        phase: Math.random() * Math.PI * 2,  // random pulse phase
+                        spawnTime: now,                       // triggers fade-in animation
+                        alive: true,
+                        fadeOutStart: null,
+                    });
+                }
+            }
+
+            // ── Garbage collect fully faded-out nodes ──
+            nodes = nodes.filter(n => {
+                if (!n.alive && n.fadeOutStart) {
+                    return (now - n.fadeOutStart) < CFG.fadeOutDuration;
+                }
+                return true;
             });
+
+            // Update connection status in the topbar
+            updateConnectionStatus(peers.length > 0);
+
+        } catch (err) {
+            console.error('[vNext] Failed to fetch peers:', err);
+            updateConnectionStatus(false);
         }
-        return result;
     }
 
-    // ── Resize ─────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // DATA FETCHING — Node info from /api/info (block height)
+    // ═══════════════════════════════════════════════════════════
+
+    let lastBlockHeight = null;
+
+    async function fetchInfo() {
+        try {
+            const resp = await fetch('/api/info?currency=USD');
+            if (!resp.ok) return;
+            const info = await resp.json();
+
+            // Update block height HUD
+            if (info.last_block && info.last_block.height) {
+                lastBlockHeight = info.last_block.height;
+            }
+        } catch (err) {
+            console.error('[vNext] Failed to fetch info:', err);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CONNECTION STATUS (topbar dot + text)
+    // ═══════════════════════════════════════════════════════════
+
+    function updateConnectionStatus(connected) {
+        const dot = document.getElementById('status-dot');
+        const txt = document.getElementById('status-text');
+        if (connected) {
+            dot.classList.add('online');
+            txt.textContent = 'Connected';
+        } else {
+            dot.classList.remove('online');
+            txt.textContent = 'Offline';
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CANVAS RESIZE
+    // Handles high-DPI displays via devicePixelRatio scaling.
+    // ═══════════════════════════════════════════════════════════
 
     function resize() {
         const dpr = window.devicePixelRatio || 1;
@@ -226,15 +400,16 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
-    // ── Drawing ────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // DRAWING — Grid, landmasses, nodes, connections
+    // ═══════════════════════════════════════════════════════════
 
+    /** Draw subtle lat/lon grid lines */
     function drawGrid() {
-        ctx.strokeStyle = 'var(--map-grid)';
-        // Fallback since canvas doesn't support CSS vars in strings
         ctx.strokeStyle = 'rgba(88,166,255,0.04)';
         ctx.lineWidth = 0.5;
 
-        // Longitude lines
+        // Longitude lines (vertical on map)
         for (let lon = -180; lon <= 180; lon += CFG.gridSpacing) {
             ctx.beginPath();
             for (let lat = -85; lat <= 85; lat += 2) {
@@ -245,7 +420,7 @@
             ctx.stroke();
         }
 
-        // Latitude lines
+        // Latitude lines (horizontal on map)
         for (let lat = -60; lat <= 80; lat += CFG.gridSpacing) {
             ctx.beginPath();
             for (let lon = -180; lon <= 180; lon += 2) {
@@ -257,6 +432,7 @@
         }
     }
 
+    /** Draw simplified continent outlines filled with dark colour */
     function drawLandmasses() {
         if (!worldReady) return;
 
@@ -277,70 +453,96 @@
         }
     }
 
+    /**
+     * Draw a single node on the canvas.
+     * Handles:
+     *   - Fade-in animation (first CFG.fadeInDuration ms after spawnTime)
+     *   - Pulsing glow effect (continuous, using node.phase)
+     *   - Fade-out animation (when node.alive=false, after fadeOutStart)
+     */
     function drawNode(node, now) {
+        // Not yet spawned (shouldn't happen with real data, but safety check)
         if (now < node.spawnTime) return;
 
         const s = worldToScreen(node.lon, node.lat);
         const c = node.color;
 
-        // Pulsing factor
-        const elapsed = now - node.spawnTime;
-        const pulse = 0.6 + 0.4 * Math.sin(node.phase + elapsed * CFG.pulseSpeed);
+        // ── Calculate overall opacity (handles fade-in and fade-out) ──
+        let opacity = 1;
 
-        // Spawn animation (first 600ms)
+        // Fade-in: ramp from 0 to 1 over fadeInDuration
+        const age = now - node.spawnTime;
+        if (age < CFG.fadeInDuration) {
+            opacity = age / CFG.fadeInDuration;
+        }
+
+        // Fade-out: ramp from 1 to 0 over fadeOutDuration
+        if (!node.alive && node.fadeOutStart) {
+            const fadeAge = now - node.fadeOutStart;
+            opacity = Math.max(0, 1 - fadeAge / CFG.fadeOutDuration);
+            if (opacity <= 0) return;  // fully faded, skip drawing
+        }
+
+        // Pulsing factor (continuous sine wave)
+        const pulse = 0.6 + 0.4 * Math.sin(node.phase + age * CFG.pulseSpeed);
+
+        // Spawn "pop" scale effect (first 600ms)
         let scale = 1;
-        const spawnAge = now - node.spawnTime;
-        if (spawnAge < 600) {
-            const t = spawnAge / 600;
+        if (age < 600) {
+            const t = age / 600;
             scale = t < 0.6 ? (t / 0.6) * 1.4 : 1.4 - 0.4 * ((t - 0.6) / 0.4);
         }
 
         const r = CFG.nodeRadius * scale;
         const gr = CFG.glowRadius * scale * pulse;
 
-        // Outer glow
+        // ── Outer glow (radial gradient) ──
         const grad = ctx.createRadialGradient(s.x, s.y, r, s.x, s.y, gr);
-        grad.addColorStop(0, rgba(c, 0.5 * pulse));
-        grad.addColorStop(0.5, rgba(c, 0.15 * pulse));
+        grad.addColorStop(0, rgba(c, 0.5 * pulse * opacity));
+        grad.addColorStop(0.5, rgba(c, 0.15 * pulse * opacity));
         grad.addColorStop(1, rgba(c, 0));
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(s.x, s.y, gr, 0, Math.PI * 2);
         ctx.fill();
 
-        // Core dot
-        ctx.fillStyle = rgba(c, 0.9);
+        // ── Core dot ──
+        ctx.fillStyle = rgba(c, 0.9 * opacity);
         ctx.beginPath();
         ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bright centre
-        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse);
+        // ── Bright white centre highlight ──
+        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse * opacity);
         ctx.beginPath();
         ctx.arc(s.x, s.y, r * 0.4, 0, Math.PI * 2);
         ctx.fill();
     }
 
+    /**
+     * Draw subtle connection lines between nearby nodes.
+     * Only draws between nodes that are close on screen (< 250px apart)
+     * and skips fading-out nodes to avoid visual clutter.
+     */
     function drawConnectionLines(now) {
-        // Draw subtle lines from each node to 1-2 nearby nodes
         ctx.lineWidth = 0.5;
-        for (let i = 0; i < nodes.length; i++) {
-            if (now < nodes[i].spawnTime) continue;
-            // Connect to the next node in array (wrapping) for a "mesh" feel
-            const j = (i + 1) % nodes.length;
-            if (now < nodes[j].spawnTime) continue;
+        const aliveNodes = nodes.filter(n => n.alive);
 
-            const a = worldToScreen(nodes[i].lon, nodes[i].lat);
-            const b = worldToScreen(nodes[j].lon, nodes[j].lat);
+        for (let i = 0; i < aliveNodes.length; i++) {
+            // Connect to the next node in the array (creates a mesh feel)
+            const j = (i + 1) % aliveNodes.length;
+            const a = worldToScreen(aliveNodes[i].lon, aliveNodes[i].lat);
+            const b = worldToScreen(aliveNodes[j].lon, aliveNodes[j].lat);
 
-            // Only draw if on-screen and not too far apart on screen
             const dx = b.x - a.x;
             const dy = b.y - a.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Only draw if reasonably close on screen
             if (dist > 250 || dist < 20) continue;
 
             const alpha = 0.08 * (1 - dist / 250);
-            ctx.strokeStyle = rgba(nodes[i].color, alpha);
+            ctx.strokeStyle = rgba(aliveNodes[i].color, alpha);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
@@ -348,40 +550,45 @@
         }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // HUD — Peer count, block height, network badges
+    // Updated every frame from current node state.
+    // ═══════════════════════════════════════════════════════════
+
     function updateHUD() {
-        const now = Date.now();
-        let visible = 0;
-        const netCounts = { ipv4: 0, ipv6: 0, tor: 0, i2p: 0, cjdns: 0 };
+        // Count alive nodes by network type
+        const netCounts = { ipv4: 0, ipv6: 0, onion: 0, i2p: 0, cjdns: 0 };
+        let total = 0;
         for (const n of nodes) {
-            if (now >= n.spawnTime) {
-                visible++;
-                netCounts[n.net]++;
-            }
+            if (!n.alive) continue;
+            total++;
+            if (netCounts.hasOwnProperty(n.net)) netCounts[n.net]++;
         }
 
-        document.getElementById('hud-peers').textContent = visible;
+        // Peer count
+        document.getElementById('hud-peers').textContent = total;
 
-        // Fake block height that slowly increments
-        const fakeBlock = 880000 + Math.floor((now % 6000000) / 6000);
-        document.getElementById('hud-block').textContent = fakeBlock.toLocaleString();
+        // Block height (from /api/info, not faked)
+        const blockEl = document.getElementById('hud-block');
+        if (lastBlockHeight !== null) {
+            blockEl.textContent = lastBlockHeight.toLocaleString();
+        } else {
+            blockEl.textContent = '---';
+        }
 
-        // Update network badges with counts
-        for (const net of NET_NAMES) {
-            const badge = document.querySelector(`.net-${net}`);
+        // Network badges with live counts
+        for (const net of Object.keys(NET_COLORS)) {
+            // Map "onion" -> "tor" for the CSS class
+            const cssClass = net === 'onion' ? 'tor' : net;
+            const badge = document.querySelector(`.net-${cssClass}`);
             if (badge) {
-                badge.textContent = `${net.toUpperCase()} ${netCounts[net]}`;
+                const label = NET_DISPLAY[net] || net.toUpperCase();
+                badge.textContent = `${label} ${netCounts[net]}`;
             }
-        }
-
-        // Set online status once nodes start appearing
-        const dot = document.getElementById('status-dot');
-        const txt = document.getElementById('status-text');
-        if (visible > 0) {
-            dot.classList.add('online');
-            txt.textContent = 'Connected';
         }
     }
 
+    /** Update the clock display in the topbar */
     function updateClock() {
         const now = new Date();
         const h = String(now.getHours()).padStart(2, '0');
@@ -390,15 +597,16 @@
         clockEl.textContent = `${h}:${m}:${s}`;
     }
 
-    // ── Tooltip ────────────────────────────────────────────────
-    const tooltipEl = document.getElementById('node-tooltip');
-    let hoveredNode = null;
+    // ═══════════════════════════════════════════════════════════
+    // TOOLTIP — Shows peer info on hover
+    // ═══════════════════════════════════════════════════════════
 
+    /** Find the nearest alive node within hit radius of screen coords */
     function findNodeAtScreen(sx, sy) {
-        const now = Date.now();
         const hitRadius = 12;
+        // Search backwards so top-drawn nodes are found first
         for (let i = nodes.length - 1; i >= 0; i--) {
-            if (now < nodes[i].spawnTime) continue;
+            if (!nodes[i].alive) continue;
             const s = worldToScreen(nodes[i].lon, nodes[i].lat);
             const dx = s.x - sx;
             const dy = s.y - sy;
@@ -409,18 +617,31 @@
         return null;
     }
 
+    /** Display tooltip near the cursor with peer details */
     function showTooltip(node, mx, my) {
+        // Location display: real city or "Private Network"
+        const locationText = node.isPrivate
+            ? '<span style="color:#4a5568;">Private Network</span>'
+            : `${node.city}${node.country ? ', ' + node.country : ''}`;
+
+        // Network label with colour
+        const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
+
         tooltipEl.innerHTML =
-            `<div class="tt-label">NODE ${node.id}</div>` +
-            `<div class="tt-value">${node.city}, ${node.country}</div>` +
-            `<div style="color:${rgba(node.color, 0.9)};margin-top:2px;">${node.net.toUpperCase()}</div>` +
+            `<div class="tt-label">PEER ${node.peerId}</div>` +
+            `<div class="tt-value">${locationText}</div>` +
+            `<div style="color:${rgba(node.color, 0.9)};margin-top:2px;">${netLabel} &middot; ${node.direction}</div>` +
+            (node.subver ? `<div style="color:#7a8494;font-size:10px;margin-top:2px;">${node.subver}</div>` : '') +
             `<div class="tt-label" style="margin-top:4px;">PING</div>` +
-            `<div class="tt-value">${node.ping}ms</div>`;
+            `<div class="tt-value">${node.ping}ms</div>` +
+            (node.conntime_fmt ? `<div class="tt-label" style="margin-top:2px;">UPTIME</div><div class="tt-value">${node.conntime_fmt}</div>` : '');
+
         tooltipEl.classList.remove('hidden');
-        // Position near cursor
+
+        // Position tooltip near cursor, clamped to viewport
         const tx = mx + 16;
         const ty = my - 10;
-        tooltipEl.style.left = Math.min(tx, W - 180) + 'px';
+        tooltipEl.style.left = Math.min(tx, W - 200) + 'px';
         tooltipEl.style.top = Math.max(ty, 48) + 'px';
     }
 
@@ -429,40 +650,45 @@
         hoveredNode = null;
     }
 
-    // ── Main Loop ──────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // MAIN RENDER LOOP
+    // Runs at ~60fps via requestAnimationFrame.
+    // ═══════════════════════════════════════════════════════════
 
     function frame() {
         const now = Date.now();
 
-        // Smooth view interpolation
+        // Smooth view interpolation (pan/zoom easing)
         view.x = lerp(view.x, targetView.x, CFG.panSmooth);
         view.y = lerp(view.y, targetView.y, CFG.panSmooth);
         view.zoom = lerp(view.zoom, targetView.zoom, CFG.panSmooth);
 
-        // Clear
+        // Clear canvas
         ctx.fillStyle = '#06080c';
         ctx.fillRect(0, 0, W, H);
 
-        // Draw layers
+        // Draw layers bottom-to-top
         drawGrid();
         drawLandmasses();
         drawConnectionLines(now);
 
-        // Draw nodes (sorted so brighter ones on top)
+        // Draw all nodes (alive + fading out)
         for (const node of nodes) {
             drawNode(node, now);
         }
 
-        // HUD
+        // Update HUD overlays
         updateHUD();
         updateClock();
 
         requestAnimationFrame(frame);
     }
 
-    // ── Interaction ────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // INTERACTION — Pan, zoom, touch, hover
+    // ═══════════════════════════════════════════════════════════
 
-    // Pan
+    // ── Mouse pan ──
     canvas.addEventListener('mousedown', (e) => {
         dragging = true;
         dragStart.x = e.clientX;
@@ -473,13 +699,14 @@
 
     window.addEventListener('mousemove', (e) => {
         if (dragging) {
+            // Pan the view by drag delta
             const dx = e.clientX - dragStart.x;
             const dy = e.clientY - dragStart.y;
             targetView.x = dragViewStart.x - dx;
             targetView.y = dragViewStart.y - dy;
             hideTooltip();
         } else {
-            // Tooltip on hover
+            // Hover detection for tooltip
             const node = findNodeAtScreen(e.clientX, e.clientY);
             if (node) {
                 showTooltip(node, e.clientX, e.clientY);
@@ -496,22 +723,21 @@
         dragging = false;
     });
 
-    // Zoom (wheel)
+    // ── Mouse wheel zoom (zooms toward cursor position) ──
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const dir = e.deltaY < 0 ? 1 : -1;
         const factor = dir > 0 ? CFG.zoomStep : 1 / CFG.zoomStep;
         const newZoom = clamp(targetView.zoom * factor, CFG.minZoom, CFG.maxZoom);
 
-        // Zoom toward cursor
+        // Remember world point under cursor before zoom
         const mx = e.clientX;
         const my = e.clientY;
         const worldBefore = screenToWorld(mx, my);
 
         targetView.zoom = newZoom;
 
-        // Adjust pan so the point under cursor stays put
-        // We need to recalculate after zoom change
+        // Adjust pan so the world point stays under the cursor after zoom
         const pBefore = project(worldBefore.lon, worldBefore.lat);
         const sxAfter = (pBefore.x - 0.5) * W * targetView.zoom + W / 2 - targetView.x * targetView.zoom;
         const syAfter = (pBefore.y - 0.5) * H * targetView.zoom + H / 2 - targetView.y * targetView.zoom;
@@ -519,7 +745,7 @@
         targetView.y += (syAfter - my) / targetView.zoom;
     }, { passive: false });
 
-    // Touch support (basic pan)
+    // ── Touch pan (single finger) ──
     let touchStart = null;
     canvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
@@ -528,6 +754,7 @@
             dragViewStart.y = targetView.y;
         }
     }, { passive: true });
+
     canvas.addEventListener('touchmove', (e) => {
         if (touchStart && e.touches.length === 1) {
             const dx = e.touches[0].clientX - touchStart.x;
@@ -536,9 +763,10 @@
             targetView.y = dragViewStart.y - dy;
         }
     }, { passive: true });
+
     canvas.addEventListener('touchend', () => { touchStart = null; }, { passive: true });
 
-    // Zoom buttons
+    // ── Zoom buttons ──
     document.getElementById('zoom-in').addEventListener('click', () => {
         targetView.zoom = clamp(targetView.zoom * CFG.zoomStep, CFG.minZoom, CFG.maxZoom);
     });
@@ -551,15 +779,27 @@
         targetView.zoom = 1;
     });
 
-    // ── Init ───────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // INIT — Start everything
+    // ═══════════════════════════════════════════════════════════
 
     function init() {
+        // Setup canvas size and DPI scaling
         resize();
         window.addEventListener('resize', resize);
 
+        // Build continent outlines
         buildWorldPolygons();
-        nodes = generateFakeNodes(CFG.nodeCount);
 
+        // Fetch real peer data immediately, then poll every 10s
+        fetchPeers();
+        setInterval(fetchPeers, CFG.pollInterval);
+
+        // Fetch node info (block height etc) immediately, then poll every 15s
+        fetchInfo();
+        setInterval(fetchInfo, CFG.infoPollInterval);
+
+        // Start the render loop
         requestAnimationFrame(frame);
     }
 

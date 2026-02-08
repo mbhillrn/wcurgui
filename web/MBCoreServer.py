@@ -1798,6 +1798,13 @@ def main():
     print(f"  {C_RED}🔴 The README has been created to guide you through this process.{C_RESET}")
     print(f"  {C_RED}🔴 Please review it if this is your first time running MBCore or need to troubleshoot.{C_RESET}")
     print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
+    # vNext experimental dashboard links
+    vnext_local = f"http://127.0.0.1:{port}/vnext"
+    vnext_lan = f"http://{lan_ip}:{port}/vnext"
+    print(f"  {C_BOLD}{C_PINK}⚡ vNext Dashboard (experimental):{C_RESET}")
+    print(f"      {C_CYAN}{vnext_local}{C_RESET}  {C_DIM}(same machine){C_RESET}")
+    print(f"      {C_CYAN}{vnext_lan}{C_RESET}  {C_DIM}(network){C_RESET}")
+    print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
     print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop the dashboard (press twice to force)")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print("")
