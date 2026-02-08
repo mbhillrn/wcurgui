@@ -108,19 +108,22 @@
     let borderLines = [];      // country border line strings
     let stateLines = [];       // state/province border line strings
     let cityPoints = [];       // { n: name, p: population, c: [lon,lat] }
+    let stateLabels = [];      // { n: name, c: [lon,lat] } — state/province centroids
     let worldReady = false;
     let lakesReady = false;
     let bordersReady = false;
     let statesReady = false;
     let citiesReady = false;
+    let stateLabelsReady = false;
 
     // Zoom thresholds for progressive detail layers
     // Country borders render at ALL zoom levels (no threshold)
-    const ZOOM_SHOW_STATES  = 3.0;   // state/province borders appear
-    const ZOOM_SHOW_CITIES_MAJOR = 3.5;  // cities > 5M population (only with borders as context)
-    const ZOOM_SHOW_CITIES_LARGE = 4.5;  // cities > 1M population
-    const ZOOM_SHOW_CITIES_MED   = 5.5;  // cities > 300K population
-    const ZOOM_SHOW_CITIES_ALL   = 7.0;  // all cities
+    const ZOOM_SHOW_STATES       = 3.0;   // state/province borders appear
+    const ZOOM_SHOW_STATE_LABELS = 3.5;   // state/province name labels appear
+    const ZOOM_SHOW_CITIES_MAJOR = 5.0;   // cities > 5M population (after state labels)
+    const ZOOM_SHOW_CITIES_LARGE = 6.0;   // cities > 1M population
+    const ZOOM_SHOW_CITIES_MED   = 8.0;   // cities > 300K population
+    const ZOOM_SHOW_CITIES_ALL   = 10.0;  // all cities
 
     // DOM references
     const clockEl = document.getElementById('clock');
@@ -311,6 +314,23 @@
             console.log(`[vNext] Loaded ${cityPoints.length} cities`);
         } catch (err) {
             console.warn('[vNext] Failed to load city data:', err);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STATE/PROVINCE LABELS — Natural Earth 50m admin-1 centroids
+    // Rendered as subtle text at medium-to-high zoom.
+    // ═══════════════════════════════════════════════════════════
+
+    async function loadStateLabels() {
+        try {
+            const resp = await fetch('/static/assets/state-labels-50m.json');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            stateLabels = await resp.json();
+            stateLabelsReady = true;
+            console.log(`[vNext] Loaded ${stateLabels.length} state/province labels`);
+        } catch (err) {
+            console.warn('[vNext] Failed to load state labels:', err);
         }
     }
 
@@ -616,6 +636,40 @@
     }
 
     /**
+     * Draw state/province name labels at their centroid positions.
+     * Appears at medium zoom (>= ZOOM_SHOW_STATE_LABELS), fades in gradually.
+     * Font size scales with zoom so labels stay readable at every level.
+     */
+    function drawStateLabels() {
+        if (!stateLabelsReady || view.zoom < ZOOM_SHOW_STATE_LABELS) return;
+
+        // Gradual fade-in over a zoom range
+        const alpha = clamp((view.zoom - ZOOM_SHOW_STATE_LABELS) / 1.0, 0, 1) * 0.45;
+
+        // Font size: starts small, grows with zoom but caps out so it doesn't explode
+        const baseFontSize = 9;
+        const fontSize = Math.min(baseFontSize + (view.zoom - ZOOM_SHOW_STATE_LABELS) * 0.8, 16);
+
+        ctx.font = `${fontSize}px 'SF Mono','Fira Code',Consolas,monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const offsets = getWrapOffsets();
+
+        for (const label of stateLabels) {
+            for (const off of offsets) {
+                const s = worldToScreen(label.c[0] + off, label.c[1]);
+                // Cull off-screen labels
+                if (s.x < -100 || s.x > W + 100 || s.y < -20 || s.y > H + 20) continue;
+
+                // Text with subtle shadow for readability on land
+                ctx.fillStyle = `rgba(160,180,210,${alpha})`;
+                ctx.fillText(label.n, s.x, s.y);
+            }
+        }
+    }
+
+    /**
      * Draw city labels at all wrap positions.
      * Cities only appear at high zoom where borders provide context:
      *   zoom 3.5+  → mega-cities (>5M)
@@ -873,6 +927,35 @@
     // Runs at ~60fps via requestAnimationFrame.
     // ═══════════════════════════════════════════════════════════
 
+    /**
+     * Clamp the view so you can never pan past the world edges.
+     * At zoom <= 1 the world is centered (no panning).
+     * When zoomed in, panning is free within bounds but world edges
+     * never leave the screen — you always see map, never void.
+     */
+    function clampView() {
+        // ── Horizontal: world spans p.x 0..1 ──
+        const maxPanX = Math.max(0, W / 2 - W / (2 * view.zoom));
+        view.x = clamp(view.x, -maxPanX, maxPanX);
+        targetView.x = clamp(targetView.x, -maxPanX, maxPanX);
+
+        // ── Vertical: Mercator bounds at ±85° latitude ──
+        const yTop = project(0, 85).y;   // ~0.035
+        const yBot = project(0, -85).y;  // ~0.965
+        const minPanY = (yTop - 0.5) * H + H / (2 * view.zoom);
+        const maxPanY = (yBot - 0.5) * H - H / (2 * view.zoom);
+
+        if (minPanY >= maxPanY) {
+            // World doesn't fill screen vertically — center it
+            const centerY = ((yTop + yBot) / 2 - 0.5) * H;
+            view.y = centerY;
+            targetView.y = centerY;
+        } else {
+            view.y = clamp(view.y, minPanY, maxPanY);
+            targetView.y = clamp(targetView.y, minPanY, maxPanY);
+        }
+    }
+
     function frame() {
         const now = Date.now();
 
@@ -880,6 +963,9 @@
         view.x = lerp(view.x, targetView.x, CFG.panSmooth);
         view.y = lerp(view.y, targetView.y, CFG.panSmooth);
         view.zoom = lerp(view.zoom, targetView.zoom, CFG.panSmooth);
+
+        // Lock view within world bounds
+        clampView();
 
         // Clear canvas with ocean colour
         ctx.fillStyle = '#06080c';
@@ -899,7 +985,9 @@
         drawCountryBorders();
         // 5. State/province borders (zoom >= 3.0, zoom-aware stroke width)
         drawStateBorders();
-        // 6. City labels (zoom >= 3.5, high zoom only with borders as context)
+        // 6. State/province name labels (zoom >= 3.5)
+        drawStateLabels();
+        // 7. City labels (zoom >= 5.0, high zoom only after state labels visible)
         drawCities();
         // 7. Connection mesh lines between nearby peers
         drawConnectionLines(now, wrapOffsets);
@@ -1026,6 +1114,7 @@
         loadBorderGeometry();
         loadStateGeometry();
         loadCityData();
+        loadStateLabels();
 
         // Fetch real peer data immediately, then poll every 10s
         fetchPeers();
