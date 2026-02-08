@@ -108,22 +108,26 @@
     let borderLines = [];      // country border line strings
     let stateLines = [];       // state/province border line strings
     let cityPoints = [];       // { n: name, p: population, c: [lon,lat] }
-    let stateLabels = [];      // { n: name, c: [lon,lat] } — state/province centroids
+    let countryLabels = [];    // { n: name, c: [lon,lat] } — country centroids (English)
+    let stateLabels = [];      // { n: name, c: [lon,lat] } — state/province centroids (English)
     let worldReady = false;
     let lakesReady = false;
     let bordersReady = false;
     let statesReady = false;
     let citiesReady = false;
+    let countryLabelsReady = false;
     let stateLabelsReady = false;
 
     // Zoom thresholds for progressive detail layers
     // Country borders render at ALL zoom levels (no threshold)
-    const ZOOM_SHOW_STATES       = 3.0;   // state/province borders appear
-    const ZOOM_SHOW_STATE_LABELS = 3.5;   // state/province name labels appear
-    const ZOOM_SHOW_CITIES_MAJOR = 5.0;   // cities > 5M population (after state labels)
-    const ZOOM_SHOW_CITIES_LARGE = 6.0;   // cities > 1M population
-    const ZOOM_SHOW_CITIES_MED   = 8.0;   // cities > 300K population
-    const ZOOM_SHOW_CITIES_ALL   = 10.0;  // all cities
+    // Label hierarchy: countries first → states → cities
+    const ZOOM_SHOW_COUNTRY_LABELS = 1.5;  // country names appear (medium zoom)
+    const ZOOM_SHOW_STATES         = 3.0;  // state/province borders appear
+    const ZOOM_SHOW_STATE_LABELS   = 4.0;  // state/province names (after countries visible)
+    const ZOOM_SHOW_CITIES_MAJOR   = 6.0;  // cities > 5M population
+    const ZOOM_SHOW_CITIES_LARGE   = 8.0;  // cities > 1M population
+    const ZOOM_SHOW_CITIES_MED     = 10.0; // cities > 300K population
+    const ZOOM_SHOW_CITIES_ALL     = 12.0; // all cities
 
     // DOM references
     const clockEl = document.getElementById('clock');
@@ -318,8 +322,25 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // STATE/PROVINCE LABELS — Natural Earth 50m admin-1 centroids
-    // Rendered as subtle text at medium-to-high zoom.
+    // COUNTRY LABELS — Natural Earth 50m admin-0 (English names)
+    // Appear at medium zoom, before state labels.
+    // ═══════════════════════════════════════════════════════════
+
+    async function loadCountryLabels() {
+        try {
+            const resp = await fetch('/static/assets/country-labels-50m.json');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            countryLabels = await resp.json();
+            countryLabelsReady = true;
+            console.log(`[vNext] Loaded ${countryLabels.length} country labels`);
+        } catch (err) {
+            console.warn('[vNext] Failed to load country labels:', err);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STATE/PROVINCE LABELS — Natural Earth 50m admin-1 (English)
+    // Rendered after country labels are already visible.
     // ═══════════════════════════════════════════════════════════
 
     async function loadStateLabels() {
@@ -622,6 +643,43 @@
         }
     }
 
+    /**
+     * Draw country name labels (admin-0, English).
+     * Appears at medium zoom, before state labels — this is the first text
+     * layer so every continent has named countries as geographic context.
+     * Font size scales with zoom; larger countries get bigger text.
+     */
+    function drawCountryLabels() {
+        if (!countryLabelsReady || view.zoom < ZOOM_SHOW_COUNTRY_LABELS) return;
+
+        // Fade in gradually over a zoom range
+        const alpha = clamp((view.zoom - ZOOM_SHOW_COUNTRY_LABELS) / 0.8, 0, 1) * 0.55;
+
+        // Font size scales with zoom, starts readable and grows
+        const fontSize = clamp(8 + (view.zoom - ZOOM_SHOW_COUNTRY_LABELS) * 1.2, 8, 18);
+
+        ctx.font = `600 ${fontSize}px 'SF Mono','Fira Code',Consolas,monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const offsets = getWrapOffsets();
+
+        for (const label of countryLabels) {
+            for (const off of offsets) {
+                const s = worldToScreen(label.c[0] + off, label.c[1]);
+                // Cull off-screen labels
+                if (s.x < -150 || s.x > W + 150 || s.y < -30 || s.y > H + 30) continue;
+
+                // Dark shadow behind text for readability against land
+                ctx.fillStyle = `rgba(6,8,12,${alpha * 0.6})`;
+                ctx.fillText(label.n, s.x + 1, s.y + 1);
+                // Country name in warm white
+                ctx.fillStyle = `rgba(200,210,225,${alpha})`;
+                ctx.fillText(label.n, s.x, s.y);
+            }
+        }
+    }
+
     /** Draw state/province borders (zoom >= ZOOM_SHOW_STATES), zoom-aware strokes */
     function drawStateBorders() {
         if (!statesReady || view.zoom < ZOOM_SHOW_STATES) return;
@@ -636,19 +694,18 @@
     }
 
     /**
-     * Draw state/province name labels at their centroid positions.
-     * Appears at medium zoom (>= ZOOM_SHOW_STATE_LABELS), fades in gradually.
-     * Font size scales with zoom so labels stay readable at every level.
+     * Draw state/province name labels (admin-1, English).
+     * Only appears AFTER country labels are already visible.
+     * Smaller and more subtle than country labels.
      */
     function drawStateLabels() {
         if (!stateLabelsReady || view.zoom < ZOOM_SHOW_STATE_LABELS) return;
 
         // Gradual fade-in over a zoom range
-        const alpha = clamp((view.zoom - ZOOM_SHOW_STATE_LABELS) / 1.0, 0, 1) * 0.45;
+        const alpha = clamp((view.zoom - ZOOM_SHOW_STATE_LABELS) / 1.5, 0, 1) * 0.40;
 
-        // Font size: starts small, grows with zoom but caps out so it doesn't explode
-        const baseFontSize = 9;
-        const fontSize = Math.min(baseFontSize + (view.zoom - ZOOM_SHOW_STATE_LABELS) * 0.8, 16);
+        // Font size: smaller than country labels, scales gently
+        const fontSize = clamp(7 + (view.zoom - ZOOM_SHOW_STATE_LABELS) * 0.6, 7, 13);
 
         ctx.font = `${fontSize}px 'SF Mono','Fira Code',Consolas,monospace`;
         ctx.textAlign = 'center';
@@ -659,23 +716,22 @@
         for (const label of stateLabels) {
             for (const off of offsets) {
                 const s = worldToScreen(label.c[0] + off, label.c[1]);
-                // Cull off-screen labels
                 if (s.x < -100 || s.x > W + 100 || s.y < -20 || s.y > H + 20) continue;
 
-                // Text with subtle shadow for readability on land
-                ctx.fillStyle = `rgba(160,180,210,${alpha})`;
+                // Subtle state/province name
+                ctx.fillStyle = `rgba(140,160,190,${alpha})`;
                 ctx.fillText(label.n, s.x, s.y);
             }
         }
     }
 
     /**
-     * Draw city labels at all wrap positions.
-     * Cities only appear at high zoom where borders provide context:
-     *   zoom 3.5+  → mega-cities (>5M)
-     *   zoom 4.5+  → large cities (>1M)
-     *   zoom 5.5+  → medium cities (>300K)
-     *   zoom 7.0+  → all cities
+     * Draw city labels. Cities are the LAST text layer — they only
+     * appear at high zoom after countries and states are visible:
+     *   zoom 6.0+  → mega-cities (>5M)
+     *   zoom 8.0+  → large cities (>1M)
+     *   zoom 10.0+ → medium cities (>300K)
+     *   zoom 12.0+ → all cities
      */
     function drawCities() {
         if (!citiesReady || view.zoom < ZOOM_SHOW_CITIES_MAJOR) return;
@@ -983,16 +1039,18 @@
         drawLakes();
         // 4. Country borders (always visible at all zoom levels)
         drawCountryBorders();
-        // 5. State/province borders (zoom >= 3.0, zoom-aware stroke width)
+        // 5. Country name labels (zoom >= 1.5) — first text layer
+        drawCountryLabels();
+        // 6. State/province borders (zoom >= 3.0, zoom-aware stroke width)
         drawStateBorders();
-        // 6. State/province name labels (zoom >= 3.5)
+        // 7. State/province name labels (zoom >= 4.0, after countries)
         drawStateLabels();
-        // 7. City labels (zoom >= 5.0, high zoom only after state labels visible)
+        // 8. City labels (zoom >= 6.0, after states visible)
         drawCities();
-        // 7. Connection mesh lines between nearby peers
+        // 9. Connection mesh lines between nearby peers
         drawConnectionLines(now, wrapOffsets);
 
-        // 5. Peer nodes (alive + fading out) at all wrap positions
+        // 10. Peer nodes (alive + fading out)
         for (const node of nodes) {
             drawNode(node, now, wrapOffsets);
         }
@@ -1108,13 +1166,14 @@
         resize();
         window.addEventListener('resize', resize);
 
-        // Load all Natural Earth geometry layers (async, each renders once loaded)
+        // Load all Natural Earth geometry + label layers (async, each renders once loaded)
         loadWorldGeometry();
         loadLakeGeometry();
         loadBorderGeometry();
         loadStateGeometry();
-        loadCityData();
+        loadCountryLabels();
         loadStateLabels();
+        loadCityData();
 
         // Fetch real peer data immediately, then poll every 10s
         fetchPeers();
